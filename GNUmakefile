@@ -75,6 +75,8 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestTLS13Certs.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSASN1.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestASN1.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSX509.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Live.Mod
 	cd $(BUILD) && $(VOC) -s ../src/httpsPure.Mod
 	cd $(BUILD) && $(VOC) -m ../src/testHttpsPure.Mod
