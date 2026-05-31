@@ -30,7 +30,7 @@ END Say;
 BEGIN
   TLSBytes.Init(der);
   (* SEQUENCE { INTEGER 1, OID sha256WithRSAEncryption, NULL } *)
-  TLSBytes.AppendByte(der, 30H); TLSBytes.AppendByte(der, 0DH);
+  TLSBytes.AppendByte(der, 30H); TLSBytes.AppendByte(der, 10H);
   TLSBytes.AppendByte(der, 02H); TLSBytes.AppendByte(der, 01H); TLSBytes.AppendByte(der, 01H);
   TLSBytes.AppendByte(der, 06H); TLSBytes.AppendByte(der, 09H);
   TLSBytes.AppendByte(der, 2AH); TLSBytes.AppendByte(der, 86H); TLSBytes.AppendByte(der, 48H);

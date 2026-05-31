@@ -80,9 +80,17 @@ BEGIN
 END PeekTLV;
 
 PROCEDURE ExpectTag*(VAR der: TLSBytes.Buffer; VAR pos: LONGINT; limit, want: LONGINT; VAR t: TLV): BOOLEAN;
+VAR old: LONGINT; ok: BOOLEAN;
 BEGIN
-  IF ~ReadTLV(der, pos, limit, t) THEN RETURN FALSE END;
-  RETURN t.tag = want
+  old := pos;
+  ok := ReadTLV(der, pos, limit, t);
+  IF ok THEN
+    IF t.tag # want THEN
+      pos := old;
+      ok := FALSE
+    END
+  END;
+  RETURN ok
 END ExpectTag;
 
 PROCEDURE EnterSequence*(VAR der: TLSBytes.Buffer; VAR pos: LONGINT; limit: LONGINT; VAR contentPos, contentLimit: LONGINT): BOOLEAN;
