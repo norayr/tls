@@ -40,14 +40,15 @@ BEGIN
   RETURN (ch = 0AX) OR (ch = 0DX) OR (ch = " ") OR (ch = 09X)
 END IsWhite;
 
-(* Extracts and decodes the first PEM certificate in text. *)
-PROCEDURE FirstCertificateDER*(pem: ARRAY OF CHAR; VAR der: TLSBytes.Buffer): BOOLEAN;
+(* Extracts and decodes the next PEM certificate in text, starting at FROM.
+   On success FROM is advanced past the END CERTIFICATE line. *)
+PROCEDURE NextCertificateDER*(pem: ARRAY OF CHAR; VAR from: LONGINT; VAR der: TLSBytes.Buffer): BOOLEAN;
 VAR
   p, q, i, j: LONGINT;
   b64: ARRAY TLSBytes.MaxLen OF CHAR;
 BEGIN
   TLSBytes.Init(der);
-  p := Find(pem, BeginCert, 0);
+  p := Find(pem, BeginCert, from);
   IF p < 0 THEN RETURN FALSE END;
   p := p + StrLen(BeginCert);
   q := Find(pem, EndCert, p);
@@ -62,7 +63,15 @@ BEGIN
     INC(i)
   END;
   b64[j] := 0X;
+  from := q + StrLen(EndCert);
   RETURN Base64.DecodeToBuffer(b64, der)
+END NextCertificateDER;
+
+PROCEDURE FirstCertificateDER*(pem: ARRAY OF CHAR; VAR der: TLSBytes.Buffer): BOOLEAN;
+VAR from: LONGINT;
+BEGIN
+  from := 0;
+  RETURN NextCertificateDER(pem, from, der)
 END FirstCertificateDER;
 
 END TLSPEM.

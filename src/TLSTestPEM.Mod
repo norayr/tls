@@ -1,18 +1,27 @@
-MODULE TLSTestPEM;
-IMPORT Out, Base64 := TLSBase64, TLSBytes, TLSPEM;
+MODULE TLSTestPEMBundle;
+IMPORT Out, TLSBytes, TLSPEM;
 
 VAR
-  b: TLSBytes.Buffer;
-  ok, checkOK: BOOLEAN;
-  pem: ARRAY 256 OF CHAR;
+  pem: ARRAY 512 OF CHAR;
+  p: LONGINT;
+  der: TLSBytes.Buffer;
+  ok: BOOLEAN;
+
+PROCEDURE Append(VAR s: ARRAY OF CHAR; VAR p: LONGINT; t: ARRAY OF CHAR);
+VAR i: LONGINT;
+BEGIN
+  i := 0;
+  WHILE (i < LEN(t)) & (t[i] # 0X) DO
+    s[p] := t[i]; INC(p); INC(i)
+  END;
+  s[p] := 0X
+END Append;
 
 PROCEDURE PrintHex(VAR b: TLSBytes.Buffer);
 VAR i: LONGINT;
 BEGIN
   i := 0;
-  WHILE i < b.len DO
-    Out.Hex(ORD(b.data[i]), -2); INC(i)
-  END
+  WHILE i < b.len DO Out.Hex(ORD(b.data[i]), -2); INC(i) END
 END PrintHex;
 
 PROCEDURE Check(name: ARRAY OF CHAR; ok: BOOLEAN);
@@ -22,68 +31,24 @@ BEGIN
   Out.Ln
 END Check;
 
-PROCEDURE CheckMan(VAR b: TLSBytes.Buffer; VAR ok: BOOLEAN);
 BEGIN
-  ok := TRUE;
-  IF b.len # 3 THEN ok := FALSE END;
-  IF ok & (ORD(b.data[0]) # ORD("M")) THEN ok := FALSE END;
-  IF ok & (ORD(b.data[1]) # ORD("a")) THEN ok := FALSE END;
-  IF ok & (ORD(b.data[2]) # ORD("n")) THEN ok := FALSE END
-END CheckMan;
+  p := 0;
+  Append(pem, p, "-----BEGIN CERTIFICATE-----"); Append(pem, p, "\n");
+  Append(pem, p, "MIIFaw=="); Append(pem, p, "\n");
+  Append(pem, p, "-----END CERTIFICATE-----"); Append(pem, p, "\n");
+  Append(pem, p, "-----BEGIN CERTIFICATE-----"); Append(pem, p, "\n");
+  Append(pem, p, "TWFu"); Append(pem, p, "\n");
+  Append(pem, p, "-----END CERTIFICATE-----"); Append(pem, p, "\n");
 
-PROCEDURE CheckMa(VAR b: TLSBytes.Buffer; VAR ok: BOOLEAN);
-BEGIN
-  ok := TRUE;
-  IF b.len # 2 THEN ok := FALSE END;
-  IF ok & (ORD(b.data[0]) # ORD("M")) THEN ok := FALSE END;
-  IF ok & (ORD(b.data[1]) # ORD("a")) THEN ok := FALSE END
-END CheckMa;
+  p := 0;
+  ok := TLSPEM.NextCertificateDER(pem, p, der);
+  Out.String("first DER = "); PrintHex(der); Out.Ln;
+  Check("  first", ok & (der.len = 4) & (ORD(der.data[0]) = 30H) & (ORD(der.data[1]) = 82H));
 
-PROCEDURE CheckM(VAR b: TLSBytes.Buffer; VAR ok: BOOLEAN);
-BEGIN
-  ok := TRUE;
-  IF b.len # 1 THEN ok := FALSE END;
-  IF ok & (ORD(b.data[0]) # ORD("M")) THEN ok := FALSE END
-END CheckM;
+  ok := TLSPEM.NextCertificateDER(pem, p, der);
+  Out.String("second DER = "); PrintHex(der); Out.Ln;
+  Check("  second", ok & (der.len = 3) & (ORD(der.data[0]) = ORD("M")) & (ORD(der.data[1]) = ORD("a")) & (ORD(der.data[2]) = ORD("n")));
 
-PROCEDURE CheckDERPrefix(VAR b: TLSBytes.Buffer; VAR ok: BOOLEAN);
-BEGIN
-  ok := TRUE;
-  IF b.len # 4 THEN ok := FALSE END;
-  IF ok & (ORD(b.data[0]) # 30H) THEN ok := FALSE END;
-  IF ok & (ORD(b.data[1]) # 82H) THEN ok := FALSE END;
-  IF ok & (ORD(b.data[2]) # 05H) THEN ok := FALSE END;
-  IF ok & (ORD(b.data[3]) # 6BH) THEN ok := FALSE END
-END CheckDERPrefix;
-
-BEGIN
-  ok := Base64.DecodeToBuffer("TWFu", b);
-  CheckMan(b, checkOK);
-  Out.String("b64 TWFu = "); PrintHex(b); Out.Ln;
-  Check("  Man", ok & checkOK);
-
-  ok := Base64.DecodeToBuffer("TWE=", b);
-  CheckMa(b, checkOK);
-  Out.String("b64 TWE= = "); PrintHex(b); Out.Ln;
-  Check("  Ma", ok & checkOK);
-
-  ok := Base64.DecodeToBuffer("TQ==", b);
-  CheckM(b, checkOK);
-  Out.String("b64 TQ== = "); PrintHex(b); Out.Ln;
-  Check("  M", ok & checkOK);
-
-  COPY("-----BEGIN CERTIFICATE-----", pem);
-  pem[27] := 0AX; pem[28] := "M"; pem[29] := "I"; pem[30] := "I"; pem[31] := "F";
-  pem[32] := "a"; pem[33] := "w"; pem[34] := "="; pem[35] := "="; pem[36] := 0AX;
-  pem[37] := "-"; pem[38] := "-"; pem[39] := "-"; pem[40] := "-"; pem[41] := "-";
-  pem[42] := "E"; pem[43] := "N"; pem[44] := "D"; pem[45] := " "; pem[46] := "C";
-  pem[47] := "E"; pem[48] := "R"; pem[49] := "T"; pem[50] := "I"; pem[51] := "F";
-  pem[52] := "I"; pem[53] := "C"; pem[54] := "A"; pem[55] := "T"; pem[56] := "E";
-  pem[57] := "-"; pem[58] := "-"; pem[59] := "-"; pem[60] := "-"; pem[61] := "-";
-  pem[62] := 0X;
-
-  ok := TLSPEM.FirstCertificateDER(pem, b);
-  CheckDERPrefix(b, checkOK);
-  Out.String("pem DER = "); PrintHex(b); Out.Ln;
-  Check("  DER prefix 3082056B", ok & checkOK)
-END TLSTestPEM.
+  ok := TLSPEM.NextCertificateDER(pem, p, der);
+  Check("  no third", ~ok)
+END TLSTestPEMBundle.
