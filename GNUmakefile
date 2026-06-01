@@ -77,6 +77,8 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Trust.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Trust.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509TrustSig.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSX509Chain.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Chain.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Names.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Names.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13EncryptedHandshake.Mod
