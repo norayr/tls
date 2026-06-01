@@ -1,11 +1,12 @@
 MODULE TLSX509Trust;
-IMPORT TLSBytes, TLSPEM, TLSX509, TLSX509Validity;
+IMPORT TLSBytes, TLSPEM, TLSX509, TLSX509Validity, TLSRSAVerify;
 
 TYPE
   Result* = RECORD
     leafParsed*, issuerFound*, issuerNameOK*, issuerSelfIssued*, leafTimeOK*, issuerTimeOK*: BOOLEAN;
     signaturesOK*: BOOLEAN;
     trustedByNameAndTime*: BOOLEAN;
+    trusted*: BOOLEAN;
     issuerDer*: TLSBytes.Buffer
   END;
 
@@ -24,6 +25,14 @@ BEGIN
   RETURN EqualDER(info.issuer, info.subject)
 END IsSelfIssued;
 
+PROCEDURE ResetResult(VAR res: Result);
+BEGIN
+  res.leafParsed := FALSE; res.issuerFound := FALSE; res.issuerNameOK := FALSE;
+  res.issuerSelfIssued := FALSE; res.leafTimeOK := FALSE; res.issuerTimeOK := FALSE;
+  res.signaturesOK := FALSE; res.trustedByNameAndTime := FALSE; res.trusted := FALSE;
+  TLSBytes.Init(res.issuerDer)
+END ResetResult;
+
 PROCEDURE FindIssuerInPEMBundle*(VAR leafInfo: TLSX509.CertInfo; bundle: ARRAY OF CHAR; VAR issuerDER: TLSBytes.Buffer; VAR issuerInfo: TLSX509.CertInfo): BOOLEAN;
 VAR from: LONGINT; der: TLSBytes.Buffer; ok, found: BOOLEAN;
 BEGIN
@@ -40,14 +49,31 @@ BEGIN
   RETURN found
 END FindIssuerInPEMBundle;
 
+PROCEDURE CheckLeafWithIssuerByNameTimeAndSignature*(VAR leafDER, issuerDER: TLSBytes.Buffer; VAR now: TLSX509Validity.Time; VAR res: Result): BOOLEAN;
+VAR leaf, issuer: TLSX509.CertInfo;
+BEGIN
+  ResetResult(res);
+  TLSBytes.Copy(issuerDER, res.issuerDer);
+  res.leafParsed := TLSX509.ParseCertificate(leafDER, leaf);
+  IF res.leafParsed THEN
+    res.leafTimeOK := TLSX509Validity.ValidAt(leaf, now);
+    res.issuerFound := TLSX509.ParseCertificate(issuerDER, issuer);
+    IF res.issuerFound THEN
+      res.issuerNameOK := SubjectEqualsIssuer(leaf, issuer);
+      res.issuerSelfIssued := IsSelfIssued(issuer);
+      res.issuerTimeOK := TLSX509Validity.ValidAt(issuer, now);
+      res.signaturesOK := TLSRSAVerify.VerifyCertificateSignatureSHA256RSA(leafDER, issuerDER)
+    END
+  END;
+  res.trustedByNameAndTime := res.leafParsed & res.issuerFound & res.issuerNameOK & res.issuerSelfIssued & res.leafTimeOK & res.issuerTimeOK;
+  res.trusted := res.trustedByNameAndTime & res.signaturesOK;
+  RETURN res.trusted
+END CheckLeafWithIssuerByNameTimeAndSignature;
+
 PROCEDURE CheckLeafWithBundleByNameAndTime*(VAR leafDER: TLSBytes.Buffer; bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR res: Result): BOOLEAN;
 VAR leaf, issuer: TLSX509.CertInfo;
 BEGIN
-  res.leafParsed := FALSE; res.issuerFound := FALSE; res.issuerNameOK := FALSE;
-  res.issuerSelfIssued := FALSE; res.leafTimeOK := FALSE; res.issuerTimeOK := FALSE;
-  res.signaturesOK := FALSE; res.trustedByNameAndTime := FALSE;
-  TLSBytes.Init(res.issuerDer);
-
+  ResetResult(res);
   res.leafParsed := TLSX509.ParseCertificate(leafDER, leaf);
   IF res.leafParsed THEN
     res.leafTimeOK := TLSX509Validity.ValidAt(leaf, now);
@@ -58,11 +84,28 @@ BEGIN
       res.issuerTimeOK := TLSX509Validity.ValidAt(issuer, now)
     END
   END;
-
-  (* Signature verification is intentionally not set here yet.  This module checks
-     the name chain and dates only; RSA/ECDSA signature verification comes next. *)
   res.trustedByNameAndTime := res.leafParsed & res.issuerFound & res.issuerNameOK & res.issuerSelfIssued & res.leafTimeOK & res.issuerTimeOK;
   RETURN res.trustedByNameAndTime
 END CheckLeafWithBundleByNameAndTime;
+
+PROCEDURE CheckLeafWithBundle*(VAR leafDER: TLSBytes.Buffer; bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR res: Result): BOOLEAN;
+VAR leaf, issuer: TLSX509.CertInfo;
+BEGIN
+  ResetResult(res);
+  res.leafParsed := TLSX509.ParseCertificate(leafDER, leaf);
+  IF res.leafParsed THEN
+    res.leafTimeOK := TLSX509Validity.ValidAt(leaf, now);
+    res.issuerFound := FindIssuerInPEMBundle(leaf, bundle, res.issuerDer, issuer);
+    IF res.issuerFound THEN
+      res.issuerNameOK := SubjectEqualsIssuer(leaf, issuer);
+      res.issuerSelfIssued := IsSelfIssued(issuer);
+      res.issuerTimeOK := TLSX509Validity.ValidAt(issuer, now);
+      res.signaturesOK := TLSRSAVerify.VerifyCertificateSignatureSHA256RSA(leafDER, res.issuerDer)
+    END
+  END;
+  res.trustedByNameAndTime := res.leafParsed & res.issuerFound & res.issuerNameOK & res.issuerSelfIssued & res.leafTimeOK & res.issuerTimeOK;
+  res.trusted := res.trustedByNameAndTime & res.signaturesOK;
+  RETURN res.trusted
+END CheckLeafWithBundle;
 
 END TLSX509Trust.
