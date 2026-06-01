@@ -1,11 +1,27 @@
 MODULE TLS13EncryptedHandshake;
-IMPORT Out, TLSBytes, TLS13Records, TLS13Keys, TLS13Finished, TLS13Certs, TLSX509;
+IMPORT Out, TLSBytes, TLS13Records, TLS13Keys, TLS13Finished, TLS13Certs, TLSX509, TLSX509Names;
 
 CONST
   EncryptedExtensions* = 8;
   Certificate* = 11;
   CertificateVerify* = 15;
   Finished* = 20;
+
+VAR
+  expectedHost: ARRAY 256 OF CHAR;
+  expectedHostSet: BOOLEAN;
+
+PROCEDURE SetExpectedHost*(host: ARRAY OF CHAR);
+BEGIN
+  COPY(host, expectedHost);
+  expectedHostSet := TRUE
+END SetExpectedHost;
+
+PROCEDURE ClearExpectedHost*;
+BEGIN
+  expectedHost[0] := 0X;
+  expectedHostSet := FALSE
+END ClearExpectedHost;
 
 PROCEDURE MessageTotalLen*(VAR data: TLSBytes.Buffer; pos: LONGINT; VAR total: LONGINT): BOOLEAN;
 VAR bodyLen: LONGINT;
@@ -54,7 +70,16 @@ BEGIN
       Out.String("  spki len="); Out.Int(info.spki.len, 0); Out.Ln;
       PrintOID("  cert sig alg OID=", info.sigAlgOID);
       PrintOID("  public key alg OID=", info.pubAlgOID);
-      Out.String("  signature len="); Out.Int(info.signature.len, 0); Out.String(" unusedBits="); Out.Int(info.signatureUnusedBits, 0); Out.Ln
+      Out.String("  signature len="); Out.Int(info.signature.len, 0); Out.String(" unusedBits="); Out.Int(info.signatureUnusedBits, 0); Out.Ln;
+      IF expectedHostSet THEN
+        Out.String("  hostname check for "); Out.String(expectedHost); Out.String(" = ");
+        IF TLSX509Names.CertMatchesHostname(leaf, expectedHost) THEN
+          Out.String("OK")
+        ELSE
+          Out.String("FAIL")
+        END;
+        Out.Ln
+      END
     ELSE
       Out.String("  leaf X509 parse FAIL"); Out.Ln
     END
@@ -166,4 +191,6 @@ BEGIN
   TLSBytes.PutBE16(msg, 0)
 END BuildEmptyEncryptedExtensions;
 
+BEGIN
+  ClearExpectedHost
 END TLS13EncryptedHandshake.

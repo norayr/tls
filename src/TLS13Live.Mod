@@ -133,6 +133,7 @@ VAR
   serverHSSeq, clientHSSeq: HUGEINT;
 BEGIN
   Init(s);
+  TLS13EncryptedHandshake.SetExpectedHost(host);
   IF ~Internet.Connect(host, port, s.fd) THEN RETURN FALSE END;
   s.connected := TRUE;
 
