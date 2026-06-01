@@ -1,5 +1,6 @@
 MODULE testHttpsPure;
-IMPORT httpsPure, strTypes;
+IMPORT httpsPure, strTypes,
+Out, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64;
 
 PROCEDURE test;
 VAR

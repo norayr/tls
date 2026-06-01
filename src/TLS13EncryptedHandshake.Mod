@@ -1,5 +1,5 @@
 MODULE TLS13EncryptedHandshake;
-IMPORT Out, TLSBytes, TLS13Records, TLS13Keys, TLS13Finished;
+IMPORT Out, TLSBytes, TLS13Records, TLS13Keys, TLS13Finished, TLS13Certs, TLSX509;
 
 CONST
   EncryptedExtensions* = 8;
@@ -30,6 +30,38 @@ BEGIN
   TLSBytes.Slice(data, pos, total, msg);
   TLSBytes.Append(transcript, msg)
 END AppendOneMessage;
+
+
+PROCEDURE PrintOID(label: ARRAY OF CHAR; VAR oid: TLSBytes.Buffer);
+VAR txt: ARRAY 128 OF CHAR;
+BEGIN
+  TLSX509.OIDText(oid, txt);
+  Out.String(label); Out.String(txt); Out.Ln
+END PrintOID;
+
+PROCEDURE DebugCertificateMessage(VAR msg: TLSBytes.Buffer);
+VAR leaf: TLSBytes.Buffer; info: TLSX509.CertInfo;
+BEGIN
+  Out.String("  certificate message: len="); Out.Int(msg.len, 0); Out.Ln;
+  IF TLS13Certs.FirstCertificate(msg, leaf) THEN
+    Out.String("  leaf cert DER len="); Out.Int(leaf.len, 0); Out.Ln;
+    IF TLSX509.ParseCertificate(leaf, info) THEN
+      Out.String("  leaf X509 parse OK"); Out.Ln;
+      Out.String("  tbs len="); Out.Int(info.tbs.len, 0); Out.Ln;
+      Out.String("  issuer len="); Out.Int(info.issuer.len, 0); Out.Ln;
+      Out.String("  subject len="); Out.Int(info.subject.len, 0); Out.Ln;
+      Out.String("  validity len="); Out.Int(info.validity.len, 0); Out.Ln;
+      Out.String("  spki len="); Out.Int(info.spki.len, 0); Out.Ln;
+      PrintOID("  cert sig alg OID=", info.sigAlgOID);
+      PrintOID("  public key alg OID=", info.pubAlgOID);
+      Out.String("  signature len="); Out.Int(info.signature.len, 0); Out.String(" unusedBits="); Out.Int(info.signatureUnusedBits, 0); Out.Ln
+    ELSE
+      Out.String("  leaf X509 parse FAIL"); Out.Ln
+    END
+  ELSE
+    Out.String("  no leaf certificate extracted"); Out.Ln
+  END
+END DebugCertificateMessage;
 
 PROCEDURE DropPrefix(VAR b: TLSBytes.Buffer; n: LONGINT);
 VAR i, newLen: LONGINT;
@@ -69,6 +101,10 @@ BEGIN
         typ := MessageType(partial, pos);
         Out.String("  hs msg type="); Out.Int(typ, 0); Out.String(" total="); Out.Int(total, 0); Out.String(" transcript before="); Out.Int(transcript.len, 0); Out.Ln;
         TLSBytes.Slice(partial, pos, total, msg);
+
+        IF typ = Certificate THEN
+          DebugCertificateMessage(msg)
+        END;
 
         IF typ = Finished THEN
           TLS13Keys.HashMessages(transcript, th);

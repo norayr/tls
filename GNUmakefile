@@ -61,13 +61,6 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestKeys.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Finished.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestFinished.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLS13EncryptedHandshake.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestEncryptedHandshake.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLS13ClientFinished.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestClientFinished.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLS13Application.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestApplication.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLS13Random.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSBase64.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSPEM.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestPEM.Mod
@@ -77,6 +70,13 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestASN1.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLS13EncryptedHandshake.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestEncryptedHandshake.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLS13ClientFinished.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestClientFinished.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLS13Application.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestApplication.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLS13Random.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Live.Mod
 	cd $(BUILD) && $(VOC) -s ../src/httpsPure.Mod
 	cd $(BUILD) && $(VOC) -m ../src/testHttpsPure.Mod

@@ -1,5 +1,5 @@
 MODULE TLSTestClientFinished;
-IMPORT Out, TLSBytes, TLS13Keys, TLS13Records, TLS13Finished, TLS13EncryptedHandshake, TLS13ClientFinished;
+IMPORT Out, TLSBytes, TLS13Keys, TLS13Records, TLS13Finished, TLS13EncryptedHandshake, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64, TLS13ClientFinished;
 
 PROCEDURE HexDigit(n: LONGINT): CHAR;
 BEGIN
