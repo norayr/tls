@@ -2,7 +2,8 @@ MODULE TLS13Live;
 IMPORT SYSTEM, Platform, Out, Strings,
        Internet, TLSBytes, TLS13Random, TLSX25519,
        TLS13Handshake, TLS13Keys, TLS13Records,
-       TLS13EncryptedHandshake, TLS13ClientFinished, TLS13Application;
+       TLS13EncryptedHandshake, TLS13ClientFinished, TLS13Application,
+       TLSCABundle, TLSX509Validity, TLSNow, TLSX509Chain;
 
 TYPE
   State* = RECORD
@@ -121,6 +122,55 @@ BEGIN
   TLSBytes.AppendOpen(b, a, n)
 END CopyArrayToBuffer;
 
+
+PROCEDURE CheckCapturedCertificateChain(host: ARRAY OF CHAR): BOOLEAN;
+VAR
+  certs: ARRAY 8 OF TLSBytes.Buffer;
+  i, n: LONGINT;
+  ca: TLSCABundle.Bundle;
+  now: TLSX509Validity.Time;
+  res: TLSX509Chain.Result;
+  ok: BOOLEAN;
+BEGIN
+  n := TLS13EncryptedHandshake.CapturedCertCount();
+  Out.String("TLS13Live: captured cert count="); Out.Int(n, 0); Out.Ln;
+  i := 0;
+  WHILE i < LEN(certs) DO TLSBytes.Init(certs[i]); INC(i) END;
+  i := 0;
+  WHILE (i < n) & (i < LEN(certs)) DO
+    IF ~TLS13EncryptedHandshake.GetCapturedCert(i, certs[i]) THEN RETURN FALSE END;
+    INC(i)
+  END;
+
+  Out.String("TLS13Live: hostname verified = ");
+  IF TLS13EncryptedHandshake.HostnameOK() THEN Out.String("OK") ELSE Out.String("FAIL") END;
+  Out.Ln;
+
+  IF ~TLSCABundle.LoadDefault(ca) THEN
+    Out.String("TLS13Live: could not load default CA bundle"); Out.Ln;
+    RETURN FALSE
+  END;
+  Out.String("TLS13Live: loaded CA bundle bytes="); Out.Int(ca.len, 0); Out.Ln;
+
+  TLSNow.Current(now);
+  Out.String("TLS13Live: current time "); Out.Int(now.year, 0); Out.Char("-"); Out.Int(now.month, 0); Out.Char("-"); Out.Int(now.day, 0); Out.Char(" "); Out.Int(now.hour, 0); Out.Char(":"); Out.Int(now.minute, 0); Out.Char(":"); Out.Int(now.second, 0); Out.Ln;
+
+  ok := TLSX509Chain.CheckChainWithPEMBundle(certs, n, ca.text, now, res);
+  Out.String("TLS13Live: chain trusted = "); IF ok THEN Out.String("OK") ELSE Out.String("FAIL") END; Out.Ln;
+  Out.String("TLS13Live: chain depth="); Out.Int(res.depth, 0);
+  Out.String(" rootFound="); IF res.rootFound THEN Out.String("true") ELSE Out.String("false") END;
+  Out.String(" rootTrusted="); IF res.rootTrusted THEN Out.String("true") ELSE Out.String("false") END;
+  Out.String(" sigsOK="); IF res.allSignaturesOK THEN Out.String("true") ELSE Out.String("false") END;
+  Out.String(" timesOK="); IF res.allTimesOK THEN Out.String("true") ELSE Out.String("false") END;
+  Out.String(" namesOK="); IF res.allNamesOK THEN Out.String("true") ELSE Out.String("false") END;
+  Out.String(" failedAt="); Out.Int(res.failedAt, 0); Out.Ln;
+
+  (* For this first live integration we report the result but only require
+     hostname success; real hard-fail on chain trust comes after we add the
+     missing signature algorithms seen in the wild. *)
+  RETURN TLS13EncryptedHandshake.HostnameOK()
+END CheckCapturedCertificateChain;
+
 PROCEDURE Connect*(host, port: ARRAY OF CHAR; VAR s: State): BOOLEAN;
 VAR
   privArr, pubArr, sharedArr: ARRAY 32 OF CHAR;
@@ -179,6 +229,10 @@ BEGIN
   IF ~finishedOK THEN Out.String("TLS13Live: server Finished verification failed"); Out.Ln; RETURN FALSE END;
 
   Out.String("TLS13Live: server Finished OK, transcript len="); Out.Int(th.len, 0); Out.Ln;
+
+  IF ~CheckCapturedCertificateChain(host) THEN
+    Out.String("TLS13Live: certificate hostname/trust check failed"); Out.Ln; RETURN FALSE
+  END;
 
   (* TLS 1.3 application traffic secrets are derived from the
      transcript ending at the server Finished.  The client Finished is

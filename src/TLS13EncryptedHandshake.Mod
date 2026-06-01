@@ -10,6 +10,9 @@ CONST
 VAR
   expectedHost: ARRAY 256 OF CHAR;
   expectedHostSet: BOOLEAN;
+  capturedCerts: ARRAY 8 OF TLSBytes.Buffer;
+  capturedCertCount: LONGINT;
+  capturedHostOK: BOOLEAN;
 
 PROCEDURE SetExpectedHost*(host: ARRAY OF CHAR);
 BEGIN
@@ -22,6 +25,36 @@ BEGIN
   expectedHost[0] := 0X;
   expectedHostSet := FALSE
 END ClearExpectedHost;
+
+PROCEDURE ResetCapturedCerts*;
+VAR i: LONGINT;
+BEGIN
+  capturedCertCount := 0;
+  capturedHostOK := FALSE;
+  i := 0;
+  WHILE i < LEN(capturedCerts) DO
+    TLSBytes.Init(capturedCerts[i]); INC(i)
+  END
+END ResetCapturedCerts;
+
+PROCEDURE CapturedCertCount*(): LONGINT;
+BEGIN
+  RETURN capturedCertCount
+END CapturedCertCount;
+
+PROCEDURE GetCapturedCert*(i: LONGINT; VAR der: TLSBytes.Buffer): BOOLEAN;
+BEGIN
+  TLSBytes.Init(der);
+  IF (i < 0) OR (i >= capturedCertCount) OR (i >= LEN(capturedCerts)) THEN RETURN FALSE END;
+  TLSBytes.Copy(capturedCerts[i], der);
+  RETURN TRUE
+END GetCapturedCert;
+
+PROCEDURE HostnameOK*(): BOOLEAN;
+BEGIN
+  RETURN capturedHostOK
+END HostnameOK;
+
 
 PROCEDURE MessageTotalLen*(VAR data: TLSBytes.Buffer; pos: LONGINT; VAR total: LONGINT): BOOLEAN;
 VAR bodyLen: LONGINT;
@@ -56,8 +89,14 @@ BEGIN
 END PrintOID;
 
 PROCEDURE DebugCertificateMessage(VAR msg: TLSBytes.Buffer);
-VAR leaf: TLSBytes.Buffer; info: TLSX509.CertInfo;
+VAR leaf, der: TLSBytes.Buffer; info: TLSX509.CertInfo; pos, limit: LONGINT;
 BEGIN
+  ResetCapturedCerts;
+  IF TLS13Certs.CertificateListStart(msg, pos, limit) THEN
+    WHILE (capturedCertCount < LEN(capturedCerts)) & TLS13Certs.NextCertificate(msg, pos, limit, der) DO
+      TLSBytes.Copy(der, capturedCerts[capturedCertCount]); INC(capturedCertCount)
+    END
+  END;
   Out.String("  certificate message: len="); Out.Int(msg.len, 0); Out.Ln;
   IF TLS13Certs.FirstCertificate(msg, leaf) THEN
     Out.String("  leaf cert DER len="); Out.Int(leaf.len, 0); Out.Ln;
@@ -73,7 +112,8 @@ BEGIN
       Out.String("  signature len="); Out.Int(info.signature.len, 0); Out.String(" unusedBits="); Out.Int(info.signatureUnusedBits, 0); Out.Ln;
       IF expectedHostSet THEN
         Out.String("  hostname check for "); Out.String(expectedHost); Out.String(" = ");
-        IF TLSX509Names.CertMatchesHostname(leaf, expectedHost) THEN
+        capturedHostOK := TLSX509Names.CertMatchesHostname(leaf, expectedHost);
+        IF capturedHostOK THEN
           Out.String("OK")
         ELSE
           Out.String("FAIL")
@@ -192,5 +232,5 @@ BEGIN
 END BuildEmptyEncryptedExtensions;
 
 BEGIN
-  ClearExpectedHost
+  ClearExpectedHost; ResetCapturedCerts
 END TLS13EncryptedHandshake.

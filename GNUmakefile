@@ -88,6 +88,8 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Application.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestApplication.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Random.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSCABundle.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSNow.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Live.Mod
 	cd $(BUILD) && $(VOC) -s ../src/httpsPure.Mod
 	cd $(BUILD) && $(VOC) -m ../src/testHttpsPure.Mod
