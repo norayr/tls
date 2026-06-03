@@ -1,5 +1,5 @@
 MODULE TLSX509Chain;
-IMPORT TLSBytes, TLSPEM, TLSX509, TLSX509Validity, TLSX509Trust, TLSRSAVerify;
+IMPORT TLSBytes, TLSPEM, TLSX509, TLSX509Validity, TLSRSAVerify;
 
 CONST
   MaxDepth* = 8;
@@ -25,10 +25,10 @@ BEGIN
   RETURN TLSBytes.EqualConstTime(a, b)
 END SameName;
 
-PROCEDURE FindIssuerInProvidedCerts(VAR cur: TLSX509.CertInfo; VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; start: LONGINT; VAR issuerDER: TLSBytes.Buffer; VAR issuerInfo: TLSX509.CertInfo): BOOLEAN;
+PROCEDURE FindIssuerInProvidedCerts(VAR cur: TLSX509.CertInfo; VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; VAR issuerDER: TLSBytes.Buffer; VAR issuerInfo: TLSX509.CertInfo): BOOLEAN;
 VAR i: LONGINT; ok, found: BOOLEAN;
 BEGIN
-  found := FALSE; i := start; TLSBytes.Init(issuerDER);
+  found := FALSE; i := 1; TLSBytes.Init(issuerDER);
   WHILE (~found) & (i < certCount) & (i < LEN(certs)) DO
     ok := TLSX509.ParseCertificate(certs[i], issuerInfo);
     IF ok THEN
@@ -72,22 +72,25 @@ BEGIN
   RETURN found
 END FindIssuerInPEMBundle;
 
-PROCEDURE StepOK(VAR childDER, issuerDER: TLSBytes.Buffer; VAR child, issuer: TLSX509.CertInfo; VAR now: TLSX509Validity.Time): BOOLEAN;
+PROCEDURE StepNameTimeOK(VAR child, issuer: TLSX509.CertInfo; VAR now: TLSX509Validity.Time): BOOLEAN;
 VAR ok: BOOLEAN;
 BEGIN
-  ok := TRUE;
-  IF ~SameName(child.issuer, issuer.subject) THEN ok := FALSE END;
-  IF ok THEN IF ~TLSX509Validity.ValidAt(issuer, now) THEN ok := FALSE END END;
-  IF ok THEN ok := TLSRSAVerify.VerifyCertificateSignatureSHA256RSA(childDER, issuerDER) END;
+  ok := SameName(child.issuer, issuer.subject);
+  IF ok THEN ok := TLSX509Validity.ValidAt(issuer, now) END;
   RETURN ok
-END StepOK;
+END StepNameTimeOK;
+
+PROCEDURE StepSignatureOK(VAR childDER, issuerDER: TLSBytes.Buffer): BOOLEAN;
+BEGIN
+  RETURN TLSRSAVerify.VerifyCertificateSignatureSHA256RSA(childDER, issuerDER)
+END StepSignatureOK;
 
 PROCEDURE CheckChainWithTrustAnchors*(VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; VAR roots: ARRAY OF TLSBytes.Buffer; rootCount: LONGINT; VAR now: TLSX509Validity.Time; VAR r: Result): BOOLEAN;
 VAR
   curDER, issuerDER: TLSBytes.Buffer;
   cur, issuer: TLSX509.CertInfo;
   depth: LONGINT;
-  found, ok, done: BOOLEAN;
+  found, ok, done, stepOK, sigOK: BOOLEAN;
 BEGIN
   Reset(r);
   IF (certCount <= 0) OR (LEN(certs) <= 0) THEN RETURN FALSE END;
@@ -100,31 +103,28 @@ BEGIN
   WHILE ok & ~done & (depth < MaxDepth) DO
     INC(depth); r.depth := depth;
 
-    (* First try intermediates supplied by the server. *)
-    found := FindIssuerInProvidedCerts(cur, certs, certCount, 1, issuerDER, issuer);
+    found := FindIssuerInProvidedCerts(cur, certs, certCount, issuerDER, issuer);
+    IF ~found THEN found := FindIssuerInTrustAnchors(cur, roots, rootCount, issuerDER, issuer) END;
+
     IF found THEN
-      IF ~StepOK(curDER, issuerDER, cur, issuer, now) THEN
-        ok := FALSE; r.failedAt := depth; r.allNamesOK := SameName(cur.issuer, issuer.subject);
-        r.allTimesOK := TLSX509Validity.ValidAt(issuer, now);
-        r.allSignaturesOK := FALSE
+      stepOK := StepNameTimeOK(cur, issuer, now);
+      IF ~stepOK THEN
+        ok := FALSE; r.failedAt := depth;
+        r.allNamesOK := SameName(cur.issuer, issuer.subject);
+        r.allTimesOK := TLSX509Validity.ValidAt(issuer, now)
       ELSE
-        TLSBytes.Copy(issuerDER, curDER); cur := issuer
+        sigOK := StepSignatureOK(curDER, issuerDER);
+        IF ~sigOK THEN r.allSignaturesOK := FALSE END;
+        IF FindIssuerInTrustAnchors(cur, roots, rootCount, issuerDER, issuer) THEN
+          (* The issuer we selected is a trust anchor. *)
+          r.rootFound := TRUE; r.rootTrusted := TRUE; TLSBytes.Copy(issuerDER, r.rootDer); done := TRUE
+        ELSE
+          (* Continue with server-provided intermediate.  Signature failure is recorded but does not stop path discovery. *)
+          TLSBytes.Copy(issuerDER, curDER); cur := issuer
+        END
       END
     ELSE
-      (* Then try trusted roots. *)
-      found := FindIssuerInTrustAnchors(cur, roots, rootCount, issuerDER, issuer);
-      IF found THEN
-        r.rootFound := TRUE; TLSBytes.Copy(issuerDER, r.rootDer);
-        IF ~StepOK(curDER, issuerDER, cur, issuer, now) THEN
-          ok := FALSE; r.failedAt := depth; r.allNamesOK := SameName(cur.issuer, issuer.subject);
-          r.allTimesOK := TLSX509Validity.ValidAt(issuer, now);
-          r.allSignaturesOK := FALSE
-        ELSE
-          r.rootTrusted := TRUE; done := TRUE
-        END
-      ELSE
-        ok := FALSE; r.failedAt := depth; r.rootFound := FALSE
-      END
+      ok := FALSE; r.failedAt := depth; r.rootFound := FALSE
     END
   END;
   IF depth >= MaxDepth THEN ok := FALSE END;
@@ -135,9 +135,10 @@ END CheckChainWithTrustAnchors;
 PROCEDURE CheckChainWithPEMBundle*(VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR r: Result): BOOLEAN;
 VAR
   curDER, issuerDER: TLSBytes.Buffer;
-  cur, issuer: TLSX509.CertInfo;
+  cur, issuer, tmpIssuer: TLSX509.CertInfo;
   depth: LONGINT;
-  found, ok, done: BOOLEAN;
+  foundInter, foundRoot, ok, done, stepOK, sigOK: BOOLEAN;
+  tmpDER: TLSBytes.Buffer;
 BEGIN
   Reset(r);
   IF (certCount <= 0) OR (LEN(certs) <= 0) THEN RETURN FALSE END;
@@ -149,25 +150,36 @@ BEGIN
   depth := 0; done := FALSE; ok := TRUE;
   WHILE ok & ~done & (depth < MaxDepth) DO
     INC(depth); r.depth := depth;
-    found := FindIssuerInProvidedCerts(cur, certs, certCount, 1, issuerDER, issuer);
-    IF found THEN
-      IF ~StepOK(curDER, issuerDER, cur, issuer, now) THEN
-        ok := FALSE; r.failedAt := depth; r.allSignaturesOK := FALSE
+
+    foundInter := FindIssuerInProvidedCerts(cur, certs, certCount, issuerDER, issuer);
+    foundRoot := FindIssuerInPEMBundle(cur, bundle, tmpDER, tmpIssuer);
+
+    IF foundRoot THEN
+      (* Prefer the trust anchor if it directly signs current certificate. *)
+      TLSBytes.Copy(tmpDER, issuerDER); issuer := tmpIssuer;
+      stepOK := StepNameTimeOK(cur, issuer, now);
+      IF ~stepOK THEN
+        ok := FALSE; r.failedAt := depth;
+        r.allNamesOK := SameName(cur.issuer, issuer.subject);
+        r.allTimesOK := TLSX509Validity.ValidAt(issuer, now)
       ELSE
+        sigOK := StepSignatureOK(curDER, issuerDER);
+        IF ~sigOK THEN r.allSignaturesOK := FALSE END;
+        r.rootFound := TRUE; r.rootTrusted := TRUE; TLSBytes.Copy(issuerDER, r.rootDer); done := TRUE
+      END
+    ELSIF foundInter THEN
+      stepOK := StepNameTimeOK(cur, issuer, now);
+      IF ~stepOK THEN
+        ok := FALSE; r.failedAt := depth;
+        r.allNamesOK := SameName(cur.issuer, issuer.subject);
+        r.allTimesOK := TLSX509Validity.ValidAt(issuer, now)
+      ELSE
+        sigOK := StepSignatureOK(curDER, issuerDER);
+        IF ~sigOK THEN r.allSignaturesOK := FALSE END;
         TLSBytes.Copy(issuerDER, curDER); cur := issuer
       END
     ELSE
-      found := FindIssuerInPEMBundle(cur, bundle, issuerDER, issuer);
-      IF found THEN
-        r.rootFound := TRUE; TLSBytes.Copy(issuerDER, r.rootDer);
-        IF ~StepOK(curDER, issuerDER, cur, issuer, now) THEN
-          ok := FALSE; r.failedAt := depth; r.allSignaturesOK := FALSE
-        ELSE
-          r.rootTrusted := TRUE; done := TRUE
-        END
-      ELSE
-        ok := FALSE; r.failedAt := depth; r.rootFound := FALSE
-      END
+      ok := FALSE; r.failedAt := depth; r.rootFound := FALSE
     END
   END;
   IF depth >= MaxDepth THEN ok := FALSE END;
