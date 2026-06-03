@@ -82,9 +82,13 @@ BEGIN
 END reader;
 
 PROCEDURE readBuf(VAR h: http.Client; VAR buf: ARRAY OF CHAR; VAR haveRead: LONGINT): BOOLEAN;
+VAR max: LONGINT;
 BEGIN
   IF h^.trn IS PureTLSSocket THEN
-    h^.connectionFlag := TLS13Live.ReadApp(h^.trn(PureTLSSocket).tls, buf, haveRead)
+    max := haveRead;
+    IF max < 0 THEN max := LEN(buf) END;
+    IF max > LEN(buf) THEN max := LEN(buf) END;
+    h^.connectionFlag := TLS13Live.ReadAppMax(h^.trn(PureTLSSocket).tls, buf, max, haveRead)
   ELSE
     Out.String("httpsPure client is not initialized with pure tls socket"); Out.Ln;
     HALT(5)

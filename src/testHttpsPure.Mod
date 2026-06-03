@@ -11,6 +11,7 @@ VAR
   answer: strTypes.pstring;
 BEGIN
   COPY("norayr.am", host); COPY("443", port);
+  COPY("duckduckgo.com", host); COPY("443", port);
   h := httpsPure.Create(host, port, "/");
   h.Init(h);
   answer := h.Get(h);
