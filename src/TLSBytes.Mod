@@ -1,5 +1,10 @@
 MODULE TLSBytes;
-IMPORT BIT;
+(* Byte buffers and 32 bit words for the TLS modules, with 32 bit signed integers only (the
+   same file serves voc and polpo): LONGINT holds a 32 bit word as its bit pattern; logical
+   operations go through SET (32 bits), shifts and rotations through SYSTEM.LSH and SYSTEM.ROT,
+   wrapping additions through Add32 (a signed overflow in the C of voc is undefined).
+   Bytes are read with LONG(ORD(c)): ORD gives an INTEGER (16 bits). *)
+IMPORT SYSTEM;
 
 CONST
   MaxLen* = 32768;
@@ -17,7 +22,7 @@ END Init;
 
 PROCEDURE SetLen*(VAR b: Buffer; n: LONGINT);
 BEGIN
-  IF (n < 0) OR (n > MaxLen) THEN HALT(20) END;
+  IF (n < 0) OR (n > MaxLen) THEN HALT(120) END;
   b.len := n
 END SetLen;
 
@@ -26,14 +31,9 @@ BEGIN
   RETURN CHR(x MOD 256)
 END Byte;
 
-PROCEDURE ByteH*(x: HUGEINT): CHAR;
-BEGIN
-  RETURN CHR(SHORT(x MOD 256))
-END ByteH;
-
 PROCEDURE AppendChar*(VAR b: Buffer; c: CHAR);
 BEGIN
-  IF b.len >= MaxLen THEN HALT(21) END;
+  IF b.len >= MaxLen THEN HALT(121) END;
   b.data[b.len] := c; INC(b.len)
 END AppendChar;
 
@@ -45,7 +45,7 @@ END AppendByte;
 PROCEDURE Append*(VAR dst: Buffer; VAR src: Buffer);
 VAR i: LONGINT;
 BEGIN
-  IF dst.len + src.len > MaxLen THEN HALT(22) END;
+  IF dst.len + src.len > MaxLen THEN HALT(122) END;
   i := 0;
   WHILE i < src.len DO
     dst.data[dst.len + i] := src.data[i]; INC(i)
@@ -56,7 +56,7 @@ END Append;
 PROCEDURE AppendOpen*(VAR dst: Buffer; VAR src: ARRAY OF CHAR; n: LONGINT);
 VAR i: LONGINT;
 BEGIN
-  IF dst.len + n > MaxLen THEN HALT(23) END;
+  IF dst.len + n > MaxLen THEN HALT(123) END;
   i := 0;
   WHILE i < n DO
     dst.data[dst.len + i] := src[i]; INC(i)
@@ -84,7 +84,7 @@ END Copy;
 PROCEDURE Slice*(VAR src: Buffer; pos, n: LONGINT; VAR dst: Buffer);
 VAR i: LONGINT;
 BEGIN
-  IF (pos < 0) OR (n < 0) OR (pos + n > src.len) OR (n > MaxLen) THEN HALT(24) END;
+  IF (pos < 0) OR (n < 0) OR (pos + n > src.len) OR (n > MaxLen) THEN HALT(124) END;
   dst.len := n;
   i := 0;
   WHILE i < n DO dst.data[i] := src.data[pos + i]; INC(i) END
@@ -92,23 +92,23 @@ END Slice;
 
 PROCEDURE GetBE16*(VAR b: Buffer; pos: LONGINT): LONGINT;
 BEGIN
-  RETURN ORD(b.data[pos]) * 256 + ORD(b.data[pos+1])
+  RETURN LONG(ORD(b.data[pos])) * 256 + LONG(ORD(b.data[pos+1]))
 END GetBE16;
 
 PROCEDURE GetBE24*(VAR b: Buffer; pos: LONGINT): LONGINT;
 BEGIN
-  RETURN ORD(b.data[pos]) * 65536 + ORD(b.data[pos+1]) * 256 + ORD(b.data[pos+2])
+  RETURN LONG(ORD(b.data[pos])) * 65536 + LONG(ORD(b.data[pos+1])) * 256 + LONG(ORD(b.data[pos+2]))
 END GetBE24;
 
 PROCEDURE GetBE32*(VAR b: Buffer; pos: LONGINT): LONGINT;
-VAR v: HUGEINT;
+(* the bit pattern: bytes 80H and above give a negative number *)
+VAR v: LONGINT;
 BEGIN
-  v := ORD(b.data[pos]);
-  v := v * 256 + ORD(b.data[pos+1]);
-  v := v * 256 + ORD(b.data[pos+2]);
-  v := v * 256 + ORD(b.data[pos+3]);
-  IF v >= 2147483648 THEN v := v - 4294967296 END;
-  RETURN SHORT(v)
+  v := LONG(ORD(b.data[pos]));
+  IF v >= 128 THEN v := v - 256 END;
+  v := v * 256 + LONG(ORD(b.data[pos+1]));
+  v := v * 256 + LONG(ORD(b.data[pos+2]));
+  RETURN v * 256 + LONG(ORD(b.data[pos+3]))
 END GetBE32;
 
 PROCEDURE PutBE16*(VAR b: Buffer; x: LONGINT);
@@ -121,75 +121,79 @@ BEGIN
   AppendByte(b, x DIV 65536); AppendByte(b, x DIV 256); AppendByte(b, x)
 END PutBE24;
 
-PROCEDURE ToU32H*(x: LONGINT): HUGEINT;
-VAR h: HUGEINT;
-BEGIN
-  h := x;
-  IF h < 0 THEN h := h + 4294967296 END;
-  RETURN h
-END ToU32H;
 
-PROCEDURE FromU32H*(h: HUGEINT): LONGINT;
-BEGIN
-  h := h MOD 4294967296;
-  IF h >= 2147483648 THEN h := h - 4294967296 END;
-  RETURN SHORT(h)
-END FromU32H;
 
 PROCEDURE PutBE32*(VAR b: Buffer; x: LONGINT);
-VAR h: HUGEINT;
+(* DIV and MOD round down, so a negative x gives its bit pattern *)
 BEGIN
-  h := ToU32H(x);
-  AppendChar(b, ByteH(h DIV 16777216));
-  AppendChar(b, ByteH(h DIV 65536));
-  AppendChar(b, ByteH(h DIV 256));
-  AppendChar(b, ByteH(h))
+  AppendByte(b, x DIV 1000000H); AppendByte(b, x DIV 10000H);
+  AppendByte(b, x DIV 100H); AppendByte(b, x)
 END PutBE32;
 
-PROCEDURE PutBE64*(VAR b: Buffer; x: HUGEINT);
-VAR p: HUGEINT;
+(** 64 bits: hi, then lo *)
+PROCEDURE PutBE64*(VAR b: Buffer; hi, lo: LONGINT);
 BEGIN
-  p := 72057594037927936; (* 256^7 *)
-  WHILE p > 0 DO
-    AppendChar(b, ByteH(x DIV p));
-    x := x MOD p;
-    p := p DIV 256
-  END
+  PutBE32(b, hi); PutBE32(b, lo)
 END PutBE64;
+
+(* ----- 32 bit words ----- *)
+
+(** a + b modulo 2^32, without overflowing *)
+PROCEDURE Add32*(a, b: LONGINT): LONGINT;
+VAR lo, hi: LONGINT;
+BEGIN
+  lo := a MOD 10000H + b MOD 10000H;
+  hi := (a DIV 10000H + b DIV 10000H + lo DIV 10000H) MOD 10000H;
+  IF hi >= 8000H THEN hi := hi - 10000H END;
+  RETURN hi * 10000H + lo MOD 10000H
+END Add32;
+
+PROCEDURE Xor32*(a, b: LONGINT): LONGINT;
+BEGIN RETURN SYSTEM.VAL(LONGINT, SYSTEM.VAL(SET, a) / SYSTEM.VAL(SET, b))
+END Xor32;
+
+PROCEDURE And32*(a, b: LONGINT): LONGINT;
+BEGIN RETURN SYSTEM.VAL(LONGINT, SYSTEM.VAL(SET, a) * SYSTEM.VAL(SET, b))
+END And32;
+
+PROCEDURE Or32*(a, b: LONGINT): LONGINT;
+BEGIN RETURN SYSTEM.VAL(LONGINT, SYSTEM.VAL(SET, a) + SYSTEM.VAL(SET, b))
+END Or32;
+
+PROCEDURE Not32*(a: LONGINT): LONGINT;
+BEGIN RETURN SYSTEM.VAL(LONGINT, -SYSTEM.VAL(SET, a))
+END Not32;
+
+(** x rotated right by n (0 < n < 32) *)
+PROCEDURE Rotr32*(x, n: LONGINT): LONGINT;
+BEGIN RETURN SYSTEM.ROT(x, -n)
+END Rotr32;
+
+(** x shifted right by n, zeros in from the left *)
+PROCEDURE Shr32*(x, n: LONGINT): LONGINT;
+BEGIN RETURN SYSTEM.LSH(x, -n)
+END Shr32;
 
 PROCEDURE XorByte*(a, b: LONGINT): INTEGER;
 BEGIN
-  RETURN ORD(BIT.CXOR(Byte(a), Byte(b)))
+  RETURN SHORT(Xor32(a, b) MOD 256)
 END XorByte;
 
 PROCEDURE Xor12*(VAR a, b, out: Buffer);
 VAR i: LONGINT;
 BEGIN
-  IF (a.len # 12) OR (b.len # 12) THEN HALT(25) END;
+  IF (a.len # 12) OR (b.len # 12) THEN HALT(125) END;
   out.len := 12;
   i := 0;
   WHILE i < 12 DO out.data[i] := CHR(XorByte(ORD(a.data[i]), ORD(b.data[i]))); INC(i) END
 END Xor12;
 
-PROCEDURE SeqNum12H*(seq: HUGEINT; VAR out: Buffer);
-VAR p: HUGEINT; i: LONGINT;
-BEGIN
-  IF seq < 0 THEN HALT(26) END;
-  out.len := 12;
-  i := 0; WHILE i < 4 DO out.data[i] := 0X; INC(i) END;
-  p := 72057594037927936; (* 256^7 *)
-  i := 4;
-  WHILE i < 12 DO
-    out.data[i] := ByteH(seq DIV p);
-    seq := seq MOD p;
-    p := p DIV 256;
-    INC(i)
-  END
-END SeqNum12H;
-
+(** the 12 byte sequence number for the nonce: 4 zero bytes, then seq in 64 bits *)
 PROCEDURE SeqNum12*(seq: LONGINT; VAR out: Buffer);
 BEGIN
-  SeqNum12H(seq, out)
+  IF seq < 0 THEN HALT(126) END;
+  out.len := 0;
+  PutBE32(out, 0); PutBE64(out, 0, seq)
 END SeqNum12;
 
 PROCEDURE EqualConstTime*(VAR a, b: Buffer): BOOLEAN;
