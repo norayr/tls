@@ -1,5 +1,6 @@
 MODULE TLSSHA256;
-IMPORT SYSTEM, TLSBytes;
+(* 32 bit words as LONGINT bit patterns, with the word operations of TLSBytes *)
+IMPORT TLSBytes;
 
 TYPE
   Digest* = ARRAY 32 OF CHAR;
@@ -10,71 +11,45 @@ CONST
 VAR
   K: ARRAY 64 OF LONGINT;
   IV: ARRAY 8 OF LONGINT;
-  ALL: SYSTEM.SET32;
-
-PROCEDURE ToH(x: LONGINT): HUGEINT;
-BEGIN
-  RETURN TLSBytes.ToU32H(x)
-END ToH;
-
-PROCEDURE FromH(h: HUGEINT): LONGINT;
-BEGIN
-  RETURN TLSBytes.FromU32H(h)
-END FromH;
 
 PROCEDURE Add2(a, b: LONGINT): LONGINT;
 BEGIN
-  RETURN FromH(ToH(a) + ToH(b))
+  RETURN TLSBytes.Add32(a, b)
 END Add2;
 
 PROCEDURE Add4(a, b, c, d: LONGINT): LONGINT;
 BEGIN
-  RETURN FromH(ToH(a) + ToH(b) + ToH(c) + ToH(d))
+  RETURN TLSBytes.Add32(TLSBytes.Add32(a, b), TLSBytes.Add32(c, d))
 END Add4;
 
 PROCEDURE Add5(a, b, c, d, e: LONGINT): LONGINT;
 BEGIN
-  RETURN FromH(ToH(a) + ToH(b) + ToH(c) + ToH(d) + ToH(e))
+  RETURN TLSBytes.Add32(Add4(a, b, c, d), e)
 END Add5;
 
 PROCEDURE And32(a, b: LONGINT): LONGINT;
 BEGIN
-  RETURN SYSTEM.VAL(LONGINT, SYSTEM.VAL(SYSTEM.SET32, a) * SYSTEM.VAL(SYSTEM.SET32, b))
+  RETURN TLSBytes.And32(a, b)
 END And32;
 
 PROCEDURE Xor32(a, b: LONGINT): LONGINT;
 BEGIN
-  RETURN SYSTEM.VAL(LONGINT, SYSTEM.VAL(SYSTEM.SET32, a) / SYSTEM.VAL(SYSTEM.SET32, b))
+  RETURN TLSBytes.Xor32(a, b)
 END Xor32;
-
-PROCEDURE Or32(a, b: LONGINT): LONGINT;
-BEGIN
-  RETURN SYSTEM.VAL(LONGINT, SYSTEM.VAL(SYSTEM.SET32, a) + SYSTEM.VAL(SYSTEM.SET32, b))
-END Or32;
 
 PROCEDURE Not32(a: LONGINT): LONGINT;
 BEGIN
-  RETURN SYSTEM.VAL(LONGINT, ALL / SYSTEM.VAL(SYSTEM.SET32, a))
+  RETURN TLSBytes.Not32(a)
 END Not32;
 
 PROCEDURE SHR32(x: LONGINT; n: INTEGER): LONGINT;
-VAR h, p: HUGEINT; i: INTEGER;
 BEGIN
-  h := ToH(x); p := 1; i := 0;
-  WHILE i < n DO p := p * 2; INC(i) END;
-  RETURN FromH(h DIV p)
+  RETURN TLSBytes.Shr32(x, n)
 END SHR32;
 
 PROCEDURE ROTR32(x: LONGINT; n: INTEGER): LONGINT;
-VAR h, lo, hi, p1, p2: HUGEINT; i: INTEGER;
 BEGIN
-  h := ToH(x); p1 := 1; i := 0;
-  WHILE i < n DO p1 := p1 * 2; INC(i) END;
-  p2 := 1; i := 0;
-  WHILE i < 32-n DO p2 := p2 * 2; INC(i) END;
-  lo := h DIV p1;
-  hi := (h MOD p1) * p2;
-  RETURN FromH(lo + hi)
+  RETURN TLSBytes.Rotr32(x, n)
 END ROTR32;
 
 PROCEDURE Ch(x, y, z: LONGINT): LONGINT;
@@ -110,12 +85,16 @@ END SmallS1;
 PROCEDURE ProcessBlock(VAR block: ARRAY OF CHAR; VAR H: ARRAY OF LONGINT);
 VAR
   W: ARRAY 64 OF LONGINT;
-  a,b,c,d,e,f,g,h,t1,t2: LONGINT;
+  a,b,c,d,e,f,g,h,t1,t2,v: LONGINT;
   i: INTEGER;
 BEGIN
   i := 0;
-  WHILE i < 16 DO
-    W[i] := FromH(ORD(block[4*i]) * 16777216 + ORD(block[4*i+1]) * 65536 + ORD(block[4*i+2]) * 256 + ORD(block[4*i+3]));
+  WHILE i < 16 DO  (* big endian words; the first byte 80H or more makes them negative *)
+    v := LONG(ORD(block[4*i]));
+    IF v >= 128 THEN v := v - 256 END;
+    v := v * 256 + LONG(ORD(block[4*i+1]));
+    v := v * 256 + LONG(ORD(block[4*i+2]));
+    W[i] := v * 256 + LONG(ORD(block[4*i+3]));
     INC(i)
   END;
   WHILE i < 64 DO
@@ -141,7 +120,6 @@ VAR
   H: ARRAY 8 OF LONGINT;
   block: ARRAY 64 OF CHAR;
   pos, i: LONGINT;
-  bitLen: HUGEINT;
   rem: LONGINT;
   tmp: TLSBytes.Buffer;
 BEGIN
@@ -158,8 +136,7 @@ BEGIN
   TLSBytes.AppendByte(tmp, 128);
   rem := tmp.len MOD 64;
   WHILE rem # 56 DO TLSBytes.AppendByte(tmp, 0); rem := tmp.len MOD 64 END;
-  bitLen := msg.len * 8;
-  TLSBytes.PutBE64(tmp, bitLen);
+  TLSBytes.PutBE64(tmp, 0, msg.len * 8);  (* msg.len <= TLSBytes.MaxLen *)
 
   pos := 0;
   WHILE pos < tmp.len DO
@@ -216,7 +193,6 @@ END DigestToBuffer;
 
 PROCEDURE InitConstants;
 BEGIN
-  ALL := {0..31};
   IV[0] := 1779033703; IV[1] := -1150833019; IV[2] := 1013904242; IV[3] := -1521486534;
   IV[4] := 1359893119; IV[5] := -1694144372; IV[6] := 528734635; IV[7] := 1541459225;
   K[0] := 1116352408; K[1] := 1899447441; K[2] := -1245643825; K[3] := -373957723;
