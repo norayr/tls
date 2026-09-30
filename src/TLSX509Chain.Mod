@@ -87,8 +87,8 @@ END StepSignatureOK;
 
 PROCEDURE CheckChainWithTrustAnchors*(VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; VAR roots: ARRAY OF TLSBytes.Buffer; rootCount: LONGINT; VAR now: TLSX509Validity.Time; VAR r: Result): BOOLEAN;
 VAR
-  curDER, issuerDER: TLSBytes.Buffer;
-  cur, issuer: TLSX509.CertInfo;
+  curDER, issuerDER, anchorDER: TLSBytes.Buffer;
+  cur, issuer, anchor: TLSX509.CertInfo;
   depth: LONGINT;
   found, ok, done, stepOK, sigOK: BOOLEAN;
 BEGIN
@@ -115,9 +115,11 @@ BEGIN
       ELSE
         sigOK := StepSignatureOK(curDER, issuerDER);
         IF ~sigOK THEN r.allSignaturesOK := FALSE END;
-        IF FindIssuerInTrustAnchors(cur, roots, rootCount, issuerDER, issuer) THEN
+        (* separate variables: the search clears and overwrites its results, and issuerDER and
+           issuer are needed for the next step (they came back empty, so the next signature failed) *)
+        IF FindIssuerInTrustAnchors(cur, roots, rootCount, anchorDER, anchor) THEN
           (* The issuer we selected is a trust anchor. *)
-          r.rootFound := TRUE; r.rootTrusted := TRUE; TLSBytes.Copy(issuerDER, r.rootDer); done := TRUE
+          r.rootFound := TRUE; r.rootTrusted := TRUE; TLSBytes.Copy(anchorDER, r.rootDer); done := TRUE
         ELSE
           (* Continue with server-provided intermediate.  Signature failure is recorded but does not stop path discovery. *)
           TLSBytes.Copy(issuerDER, curDER); cur := issuer
