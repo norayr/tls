@@ -60,6 +60,7 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/TLSECDSA.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestECDSA256.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestECDSA384.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestECDH.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX25519.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX25519.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestCrypto.Mod
@@ -70,6 +71,7 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestRecords.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Handshake.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestHandshake.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestHRR.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Keys.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestKeys.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Finished.Mod
@@ -107,6 +109,7 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/httpsPure.Mod
 	cd $(BUILD) && $(VOC) -m ../src/testHttpsPure.Mod
 	cd $(BUILD) && $(VOC) -m ../src/tlsConnect.Mod
+	cd $(BUILD) && $(VOC) -m ../src/httpsGet.Mod
 tests:
 	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/test/TestEncryption.Mod -m
 	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/test/TestCrypt.Mod -m

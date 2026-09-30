@@ -2,7 +2,8 @@
 # usage: testservers.py seconds dir; writes the keys and dir/ca.pem, then
 #   SSL_CERT_FILE=dir/ca.pem ./tlsConnect localhost 18443
 # 18443 RSA and 18444 ECDSA connect; 18445 wrong host, 18446 untrusted CA, 18447 expired,
-# 18448 self-signed and 18449 TLS 1.2 only are refused
+# 18448 self-signed and 18449 TLS 1.2 only are refused; 18450 cut (no close_notify), 18451 closed
+# properly, 18452 shorter than its Content-Length, 18453 1 MB (dir/big.ref)
 import ssl, socket, threading, datetime, sys, os, time
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
@@ -34,6 +35,25 @@ cases = {  # port: (certificate chain, key, TLS 1.2 only)
  18448: ([mk("localhost", ek, "localhost", ek, False, ["localhost"])], ek, False),                # self-signed
  18449: ([mk("localhost", ek, "Test CA", ca_k, False, ["localhost"])], ek, True),                 # TLS 1.2 only
 }
+good = cases[18444]
+MODE = {18450: 'cut', 18451: 'closed', 18452: 'short', 18453: 'big'}  # answers other than "ok"
+for p in MODE: cases[p] = good
+BIG = bytes((i * 7 + i // 251) % 256 for i in range(1 << 20))
+open(os.path.join(D, "big.ref"), "wb").write(BIG)
+def answer(port, t):
+    m = MODE.get(port)
+    if m == 'cut':      # the body up to the end, then the TCP connection closes without close_notify
+        t.sendall(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nno end"); t.close()
+    elif m == 'closed': # the same, closed with close_notify
+        t.sendall(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nproper end")
+        try: t.unwrap().close()
+        except Exception: t.close()
+    elif m == 'short':  # 10 bytes announced, 2 sent
+        t.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\nok"); t.close()
+    elif m == 'big':
+        t.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % len(BIG) + BIG); t.close()
+    else:
+        t.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"); t.close()
 def serve(port, chain, key, tls12):
     cf = os.path.join(D, "c%d.pem" % port); kf = os.path.join(D, "k%d.pem" % port)
     open(cf, "wb").write(b"".join(pem(c) for c in chain)); open(kf, "wb").write(keypem(key))
@@ -51,7 +71,7 @@ def serve(port, chain, key, tls12):
                 d = t.recv(4096)
                 if not d: break
                 req += d
-            t.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"); t.close()
+            answer(port, t)
         except Exception as e: print(port, repr(e), flush=True); c.close()
 for p, (chain, key, t12) in cases.items(): threading.Thread(target=serve, args=(p, chain, key, t12), daemon=True).start()
 time.sleep(float(sys.argv[1]))
