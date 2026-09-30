@@ -42,7 +42,7 @@ BEGIN
   i := 0; bit := 0;
   WHILE i < n DO  (* from the last byte, 8 bits at a time *)
     v := LONG(ORD(b[pos + n - 1 - i]));
-    s := bit MOD Bits;  (* a variable: ASH(1, bit MOD Bits) crashed the x86 compiler of polpo *)
+    s := bit MOD Bits;
     IF bit DIV Bits < MaxLimbs THEN
       a.d[bit DIV Bits] := a.d[bit DIV Bits] + (v * ASH(1, s)) MOD Base
     END;
@@ -62,7 +62,7 @@ BEGIN
   i := 0; bit := 0;
   WHILE i < n DO
     v := 0; s := bit MOD Bits;
-    IF bit DIV Bits < a.len THEN v := a.d[bit DIV Bits]; v := v DIV ASH(1, s) END;  (* two statements: the ARM compiler of polpo crashed on x.d[i] DIV ASH(1, s) *)
+    IF bit DIV Bits < a.len THEN v := a.d[bit DIV Bits] DIV ASH(1, s) END;
     IF (s > Bits - 8) & (bit DIV Bits + 1 < a.len) THEN
       v := v + a.d[bit DIV Bits + 1] * ASH(1, Bits - s)
     END;
@@ -206,7 +206,7 @@ END MontOne;
 
 (** out := a mod m for any a (subtractions after shifting; for hashes and bytes wider than m) *)
 PROCEDURE ModReduce*(VAR a: Num; VAR mod: Modulus; VAR out: Num);
-VAR i, bit, j, limb: LONGINT; t: Num;
+VAR i, bit, j: LONGINT; t: Num;
 BEGIN
   SetZero(t, mod.m.len);
   i := a.len - 1;
@@ -214,8 +214,7 @@ BEGIN
     bit := Bits - 1;
     WHILE bit >= 0 DO
       IF AddInPlace(t, t) # 0 THEN SubInPlace(t, mod.m) ELSE Reduce1(t, mod.m) END;
-      limb := a.d[i];
-      IF ODD(limb DIV ASH(1, bit)) THEN
+      IF ODD(a.d[i] DIV ASH(1, bit)) THEN
         j := 0; INC(t.d[0]);
         WHILE (j < t.len - 1) & (t.d[j] >= Base) DO t.d[j] := t.d[j] - Base; INC(t.d[j+1]); INC(j) END;
         Reduce1(t, mod.m)
@@ -229,15 +228,14 @@ END ModReduce;
 
 (** out := a^e mod m; a < m in Montgomery form, out in Montgomery form; e big endian bytes *)
 PROCEDURE MontPow*(VAR a: Num; VAR e: ARRAY OF CHAR; epos, elen: LONGINT; VAR mod: Modulus; VAR out: Num);
-VAR r: Num; i, bit, byte: LONGINT;
+VAR r: Num; i, bit: LONGINT;
 BEGIN
   r := mod.one; i := 0;
   WHILE i < elen DO
     bit := 7;
     WHILE bit >= 0 DO
       MontMul(r, r, mod, r);
-      byte := ORD(e[epos + i]);
-      IF ODD(byte DIV ASH(1, bit)) THEN MontMul(r, a, mod, r) END;
+      IF ODD(ORD(e[epos + i]) DIV ASH(1, bit)) THEN MontMul(r, a, mod, r) END;
       DEC(bit)
     END;
     INC(i)
