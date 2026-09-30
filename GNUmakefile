@@ -83,16 +83,17 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestASN1.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLSBigInt.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLSRSAVerify.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestRSAVerify.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Validity.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLSX509Trust.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Trust.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509TrustSig.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLSX509Chain.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Chain.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSRSA.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestRSA1.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestRSA2.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestRSA3.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Names.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSX509Ext.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSSig.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSX509Chain.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSCABundle.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestChain.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Names.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13EncHandshake.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestEncHandshake.Mod
@@ -101,11 +102,11 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Application.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestApplication.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Random.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLSCABundle.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSNow.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Live.Mod
 	cd $(BUILD) && $(VOC) -s ../src/httpsPure.Mod
 	cd $(BUILD) && $(VOC) -m ../src/testHttpsPure.Mod
+	cd $(BUILD) && $(VOC) -m ../src/tlsConnect.Mod
 tests:
 	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/test/TestEncryption.Mod -m
 	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/test/TestCrypt.Mod -m

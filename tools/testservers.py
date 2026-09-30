@@ -1,0 +1,53 @@
+# local TLS servers for the client tests (src/tlsConnect.Mod): one port per case, HTTP answer "ok";
+# usage: testservers.py seconds dir; writes the keys and dir/ca.pem, then
+#   SSL_CERT_FILE=dir/ca.pem ./tlsConnect localhost 18443
+# 18443 RSA and 18444 ECDSA connect; 18445 wrong host, 18446 untrusted CA, 18447 expired,
+# 18448 self-signed and 18449 TLS 1.2 only are refused
+import ssl, socket, threading, datetime, sys, os, time
+from cryptography import x509
+from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
+D = sys.argv[2]
+now = datetime.datetime.now(datetime.timezone.utc)
+def name(cn): return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
+def mk(subject, key, issuer, ikey, ca, san=None, t0=None, t1=None):
+    b = (x509.CertificateBuilder().subject_name(name(subject)).issuer_name(name(issuer)).public_key(key.public_key())
+         .serial_number(x509.random_serial_number()).not_valid_before(t0 or now - datetime.timedelta(days=1))
+         .not_valid_after(t1 or now + datetime.timedelta(days=30))
+         .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
+    if san: b = b.add_extension(x509.SubjectAlternativeName([x509.DNSName(s) for s in san]), critical=False)
+    if not ca: b = b.add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+    return b.sign(ikey, hashes.SHA256())
+def pem(c): return c.public_bytes(serialization.Encoding.PEM)
+def keypem(k): return k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+ca_k = ec.generate_private_key(ec.SECP256R1()); ca = mk("Test CA", ca_k, "Test CA", ca_k, True)
+other_k = ec.generate_private_key(ec.SECP256R1()); other = mk("Other CA", other_k, "Other CA", other_k, True)
+open(os.path.join(D, "ca.pem"), "wb").write(pem(ca))
+rk = rsa.generate_private_key(65537, 2048); ek = ec.generate_private_key(ec.SECP256R1())
+cases = {  # port: (certificate chain, key, TLS 1.2 only)
+ 18443: ([mk("localhost", rk, "Test CA", ca_k, False, ["localhost"])], rk, False),                 # RSA: valid
+ 18444: ([mk("localhost", ek, "Test CA", ca_k, False, ["localhost"])], ek, False),                 # ECDSA: valid
+ 18445: ([mk("other.test", ek, "Test CA", ca_k, False, ["other.test"])], ek, False),               # wrong host
+ 18446: ([mk("localhost", ek, "Other CA", other_k, False, ["localhost"])], ek, False),             # untrusted CA
+ 18447: ([mk("localhost", ek, "Test CA", ca_k, False, ["localhost"], now - datetime.timedelta(days=60), now - datetime.timedelta(days=30))], ek, False),  # expired
+ 18448: ([mk("localhost", ek, "localhost", ek, False, ["localhost"])], ek, False),                # self-signed
+ 18449: ([mk("localhost", ek, "Test CA", ca_k, False, ["localhost"])], ek, True),                 # TLS 1.2 only
+}
+def serve(port, chain, key, tls12):
+    cf = os.path.join(D, "c%d.pem" % port); kf = os.path.join(D, "k%d.pem" % port)
+    open(cf, "wb").write(b"".join(pem(c) for c in chain)); open(kf, "wb").write(keypem(key))
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(cf, kf)
+    if tls12: ctx.minimum_version = ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    else: ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", port)); s.listen(5); s.settimeout(1)
+    end = time.time() + float(sys.argv[1])
+    while time.time() < end:
+        try: c, _ = s.accept()
+        except socket.timeout: continue
+        try:
+            t = ctx.wrap_socket(c, server_side=True); t.settimeout(10); t.recv(4096)
+            t.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"); t.close()
+        except Exception as e: c.close()
+for p, (chain, key, t12) in cases.items(): threading.Thread(target=serve, args=(p, chain, key, t12), daemon=True).start()
+time.sleep(float(sys.argv[1]))
