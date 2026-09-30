@@ -1,4 +1,4 @@
-MODULE TLSTestPEMBundle;
+MODULE TLSTestPEM;
 IMPORT Out, TLSBytes, TLSPEM;
 
 VAR
@@ -17,6 +17,12 @@ BEGIN
   s[p] := 0X
 END Append;
 
+(* Oberon strings have no escapes: "\n" is a backslash and an n *)
+PROCEDURE AppendLF(VAR s: ARRAY OF CHAR; VAR p: LONGINT);
+BEGIN
+  s[p] := 0AX; INC(p); s[p] := 0X
+END AppendLF;
+
 PROCEDURE PrintHex(VAR b: TLSBytes.Buffer);
 VAR i: LONGINT;
 BEGIN
@@ -33,12 +39,12 @@ END Check;
 
 BEGIN
   p := 0;
-  Append(pem, p, "-----BEGIN CERTIFICATE-----"); Append(pem, p, "\n");
-  Append(pem, p, "MIIFaw=="); Append(pem, p, "\n");
-  Append(pem, p, "-----END CERTIFICATE-----"); Append(pem, p, "\n");
-  Append(pem, p, "-----BEGIN CERTIFICATE-----"); Append(pem, p, "\n");
-  Append(pem, p, "TWFu"); Append(pem, p, "\n");
-  Append(pem, p, "-----END CERTIFICATE-----"); Append(pem, p, "\n");
+  Append(pem, p, "-----BEGIN CERTIFICATE-----"); AppendLF(pem, p);
+  Append(pem, p, "MIIFaw=="); AppendLF(pem, p);
+  Append(pem, p, "-----END CERTIFICATE-----"); AppendLF(pem, p);
+  Append(pem, p, "-----BEGIN CERTIFICATE-----"); AppendLF(pem, p);
+  Append(pem, p, "TWFu"); AppendLF(pem, p);
+  Append(pem, p, "-----END CERTIFICATE-----"); AppendLF(pem, p);
 
   p := 0;
   ok := TLSPEM.NextCertificateDER(pem, p, der);
@@ -51,4 +57,4 @@ BEGIN
 
   ok := TLSPEM.NextCertificateDER(pem, p, der);
   Check("  no third", ~ok)
-END TLSTestPEMBundle.
+END TLSTestPEM.

@@ -57,7 +57,7 @@ BEGIN
   RETURN found
 END FindIssuerInTrustAnchors;
 
-PROCEDURE FindIssuerInPEMBundle(VAR cur: TLSX509.CertInfo; bundle: ARRAY OF CHAR; VAR rootDER: TLSBytes.Buffer; VAR rootInfo: TLSX509.CertInfo): BOOLEAN;
+PROCEDURE FindIssuerInPEMBundle(VAR cur: TLSX509.CertInfo; VAR bundle: ARRAY OF CHAR; VAR rootDER: TLSBytes.Buffer; VAR rootInfo: TLSX509.CertInfo): BOOLEAN;
 VAR from: LONGINT; der: TLSBytes.Buffer; ok, found: BOOLEAN;
 BEGIN
   from := 0; found := FALSE; TLSBytes.Init(rootDER);
@@ -106,6 +106,9 @@ BEGIN
     found := FindIssuerInProvidedCerts(cur, certs, certCount, issuerDER, issuer);
     IF ~found THEN found := FindIssuerInTrustAnchors(cur, roots, rootCount, issuerDER, issuer) END;
 
+    IF found & TLSBytes.EqualConstTime(issuerDER, curDER) & ~FindIssuerInTrustAnchors(cur, roots, rootCount, anchorDER, anchor) THEN
+      found := FALSE  (* self-signed and not a trust anchor: an unknown root *)
+    END;
     IF found THEN
       stepOK := StepNameTimeOK(cur, issuer, now);
       IF ~stepOK THEN
@@ -134,7 +137,7 @@ BEGIN
   RETURN r.trusted
 END CheckChainWithTrustAnchors;
 
-PROCEDURE CheckChainWithPEMBundle*(VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR r: Result): BOOLEAN;
+PROCEDURE CheckChainWithPEMBundle*(VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; VAR bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR r: Result): BOOLEAN;
 VAR
   curDER, issuerDER: TLSBytes.Buffer;
   cur, issuer, tmpIssuer: TLSX509.CertInfo;
@@ -169,6 +172,9 @@ BEGIN
         IF ~sigOK THEN r.allSignaturesOK := FALSE END;
         r.rootFound := TRUE; r.rootTrusted := TRUE; TLSBytes.Copy(issuerDER, r.rootDer); done := TRUE
       END
+    ELSIF foundInter & TLSBytes.EqualConstTime(issuerDER, curDER) THEN
+      (* self-signed and not in the bundle: an unknown root (it looped up to MaxDepth) *)
+      ok := FALSE; r.failedAt := depth; r.rootFound := FALSE
     ELSIF foundInter THEN
       stepOK := StepNameTimeOK(cur, issuer, now);
       IF ~stepOK THEN

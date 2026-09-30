@@ -33,7 +33,7 @@ BEGIN
   TLSBytes.Init(res.issuerDer)
 END ResetResult;
 
-PROCEDURE FindIssuerInPEMBundle*(VAR leafInfo: TLSX509.CertInfo; bundle: ARRAY OF CHAR; VAR issuerDER: TLSBytes.Buffer; VAR issuerInfo: TLSX509.CertInfo): BOOLEAN;
+PROCEDURE FindIssuerInPEMBundle*(VAR leafInfo: TLSX509.CertInfo; VAR bundle: ARRAY OF CHAR; VAR issuerDER: TLSBytes.Buffer; VAR issuerInfo: TLSX509.CertInfo): BOOLEAN;
 VAR from: LONGINT; der: TLSBytes.Buffer; ok, found: BOOLEAN;
 BEGIN
   from := 0; found := FALSE; TLSBytes.Init(issuerDER);
@@ -70,7 +70,7 @@ BEGIN
   RETURN res.trusted
 END CheckLeafWithIssuerNameTimeSig;
 
-PROCEDURE CheckLeafWithBundleNameTime*(VAR leafDER: TLSBytes.Buffer; bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR res: Result): BOOLEAN;
+PROCEDURE CheckLeafWithBundleNameTime*(VAR leafDER: TLSBytes.Buffer; VAR bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR res: Result): BOOLEAN;
 VAR leaf, issuer: TLSX509.CertInfo;
 BEGIN
   ResetResult(res);
@@ -88,7 +88,7 @@ BEGIN
   RETURN res.trustedByNameAndTime
 END CheckLeafWithBundleNameTime;
 
-PROCEDURE CheckLeafWithBundle*(VAR leafDER: TLSBytes.Buffer; bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR res: Result): BOOLEAN;
+PROCEDURE CheckLeafWithBundle*(VAR leafDER: TLSBytes.Buffer; VAR bundle: ARRAY OF CHAR; VAR now: TLSX509Validity.Time; VAR res: Result): BOOLEAN;
 VAR leaf, issuer: TLSX509.CertInfo;
 BEGIN
   ResetResult(res);

@@ -5,7 +5,7 @@ CONST
   BeginCert = "-----BEGIN CERTIFICATE-----";
   EndCert = "-----END CERTIFICATE-----";
 
-PROCEDURE MatchAt(s: ARRAY OF CHAR; pos: LONGINT; pat: ARRAY OF CHAR): BOOLEAN;
+PROCEDURE MatchAt(VAR s: ARRAY OF CHAR; pos: LONGINT; pat: ARRAY OF CHAR): BOOLEAN;
 VAR i: LONGINT;
 BEGIN
   i := 0;
@@ -16,7 +16,7 @@ BEGIN
   RETURN TRUE
 END MatchAt;
 
-PROCEDURE Find(s: ARRAY OF CHAR; pat: ARRAY OF CHAR; from: LONGINT): LONGINT;
+PROCEDURE Find(VAR s: ARRAY OF CHAR; pat: ARRAY OF CHAR; from: LONGINT): LONGINT;  (* VAR: s is a whole CA bundle *)
 VAR p: LONGINT;
 BEGIN
   p := from;
@@ -42,7 +42,7 @@ END IsWhite;
 
 (* Extracts and decodes the next PEM certificate in text, starting at FROM.
    On success FROM is advanced past the END CERTIFICATE line. *)
-PROCEDURE NextCertificateDER*(pem: ARRAY OF CHAR; VAR from: LONGINT; VAR der: TLSBytes.Buffer): BOOLEAN;
+PROCEDURE NextCertificateDER*(VAR pem: ARRAY OF CHAR; VAR from: LONGINT; VAR der: TLSBytes.Buffer): BOOLEAN;
 VAR
   p, q, i, j: LONGINT;
   b64: ARRAY TLSBytes.MaxLen OF CHAR;
@@ -67,7 +67,7 @@ BEGIN
   RETURN Base64.DecodeToBuffer(b64, der)
 END NextCertificateDER;
 
-PROCEDURE FirstCertificateDER*(pem: ARRAY OF CHAR; VAR der: TLSBytes.Buffer): BOOLEAN;
+PROCEDURE FirstCertificateDER*(VAR pem: ARRAY OF CHAR; VAR der: TLSBytes.Buffer): BOOLEAN;
 VAR from: LONGINT;
 BEGIN
   from := 0;
