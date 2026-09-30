@@ -46,8 +46,12 @@ def serve(port, chain, key, tls12):
         try: c, _ = s.accept()
         except socket.timeout: continue
         try:
-            t = ctx.wrap_socket(c, server_side=True); t.settimeout(10); t.recv(4096)
+            t = ctx.wrap_socket(c, server_side=True); t.settimeout(60); req = b""
+            while b"\r\n\r\n" not in req:
+                d = t.recv(4096)
+                if not d: break
+                req += d
             t.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"); t.close()
-        except Exception as e: c.close()
+        except Exception as e: print(port, repr(e), flush=True); c.close()
 for p, (chain, key, t12) in cases.items(): threading.Thread(target=serve, args=(p, chain, key, t12), daemon=True).start()
 time.sleep(float(sys.argv[1]))
