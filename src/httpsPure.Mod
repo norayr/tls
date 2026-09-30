@@ -1,7 +1,6 @@
 MODULE httpsPure;
 
-IMPORT Strings, Out,
-       http, strTypes, strUtils, TLS13Live;
+IMPORT Out, http, strTypes, strUtils, TLS13Live;
 
 TYPE
    PureTLSSocket = POINTER TO PureTLSSocketDesc;
@@ -42,7 +41,7 @@ BEGIN
     h^.connectionFlag := TLS13Live.Connect(h^.host^, h^.port^, h^.trn(PureTLSSocket).tls)
   ELSE
     Out.String("httpsPure client is not initialized with pure tls socket"); Out.Ln;
-    HALT(5)
+    HALT(100)
   END;
   RETURN h^.connectionFlag
 END connector;
@@ -53,7 +52,7 @@ BEGIN
     TLS13Live.Disconnect(h^.trn(PureTLSSocket).tls)
   ELSE
     Out.String("httpsPure client is not initialized with pure tls socket"); Out.Ln;
-    HALT(5)
+    HALT(100)
   END
 END disconnector;
 
@@ -63,20 +62,35 @@ BEGIN
     h^.connectionFlag := TLS13Live.WriteAppString(h^.trn(PureTLSSocket).tls, buf)
   ELSE
     Out.String("httpsPure client is not initialized with pure tls socket"); Out.Ln;
-    HALT(5)
+    HALT(100)
   END;
   RETURN h^.connectionFlag
 END writer;
 
+(* toRead < 0: what is there, at most LEN(buf)-1 bytes; else exactly toRead bytes (as http
+   expects of Read); then 0X *)
 PROCEDURE reader(VAR h: http.Client; VAR buf: ARRAY OF CHAR; toRead: LONGINT): BOOLEAN;
-VAR n, max: LONGINT;
+VAR n, got, i: LONGINT; tmp: ARRAY 4096 OF CHAR; t: PureTLSSocket; ok: BOOLEAN;
 BEGIN
   IF h^.trn IS PureTLSSocket THEN
-    IF toRead = -1 THEN max := 1 ELSE max := toRead END;
-    h^.connectionFlag := TLS13Live.ReadAppMax(h^.trn(PureTLSSocket).tls, buf, max, n)
+    t := h^.trn(PureTLSSocket);
+    IF toRead < 0 THEN
+      ok := TLS13Live.ReadAppMax(t.tls, buf, LEN(buf) - 1, n)
+    ELSE
+      IF toRead > LEN(buf) - 1 THEN toRead := LEN(buf) - 1 END;
+      got := 0; ok := TRUE;
+      WHILE ok & (got < toRead) DO
+        n := toRead - got; IF n > LEN(tmp) THEN n := LEN(tmp) END;
+        ok := TLS13Live.ReadAppMax(t.tls, tmp, n, n);
+        i := 0; WHILE i < n DO buf[got + i] := tmp[i]; INC(i) END;
+        INC(got, n)
+      END;
+      buf[got] := 0X
+    END;
+    h^.connectionFlag := ok
   ELSE
     Out.String("httpsPure client is not initialized with pure tls socket"); Out.Ln;
-    HALT(5)
+    HALT(100)
   END;
   RETURN h^.connectionFlag
 END reader;
@@ -91,7 +105,7 @@ BEGIN
     h^.connectionFlag := TLS13Live.ReadAppMax(h^.trn(PureTLSSocket).tls, buf, max, haveRead)
   ELSE
     Out.String("httpsPure client is not initialized with pure tls socket"); Out.Ln;
-    HALT(5)
+    HALT(100)
   END;
   RETURN h^.connectionFlag
 END readBuf;
@@ -100,6 +114,7 @@ PROCEDURE Create*(host, port, path: ARRAY OF CHAR): TLSClient;
 VAR
   hs: TLSClient;
   socket: PureTLSSocket;
+  c: http.Client;
 BEGIN
   NEW(hs);
   hs^.eol[0] := 0DX;  hs^.eol[1] := 0AX; hs^.null[0] := 0X;
@@ -115,25 +130,7 @@ BEGIN
   hs^.Save := http.save;
   http.formReqHeader(hs);
 
-  hs^.rspnPstrings          := NIL;
-  hs^.rspnFirstLine         := NIL;
-  hs^.rspnDate              := NIL;
-  hs^.rspnServer            := NIL;
-  hs^.rspnLastModified      := NIL;
-  hs^.rspnETag              := NIL;
-  hs^.rspnAcceptRanges      := NIL;
-  hs^.rspnContentLength     := 0;
-  hs^.rspnVary              := NIL;
-  hs^.rspnContentType       := NIL;
-  hs^.rspnTransferEncoding  := NIL;
-  hs^.rspnConnection        := NIL;
-  hs^.rspnCacheControl      := NIL;
-  hs^.rspnExpires           := NIL;
-  hs^.rspnLocation          := NIL;
-  hs^.rspnReportTo          := NIL;
-  hs^.rspnNEL               := NIL;
-  hs^.rspnCFRAY             := NIL;
-  hs^.rspnBody              := NIL;
+  c := hs; http.clearstate(c);
 
   NEW(socket);
   TLS13Live.Init(socket^.tls);

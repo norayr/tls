@@ -1,27 +1,24 @@
 MODULE TLS13Random;
+(* random bytes from /dev/urandom, through Linux0 (polpo's, or the one of the voc Internet
+   module); replaces the ulmRandomGenerators filler, which was not cryptographically secure *)
+IMPORT Linux0, SYSTEM;
 
-IMPORT Random := ulmRandomGenerators;
-
-(*
-  Temporary PRNG-backed random filler.
-
-  WARNING: this is not cryptographically secure.  It is useful only for
-  bringing up the pure Oberon TLS client without C glue.  Later we should
-  replace this module with a /dev/urandom based version or a small OS wrapper.
-*)
-
+(** buf[0..n) := n random bytes; FALSE if /dev/urandom cannot give them *)
 PROCEDURE Fill*(VAR buf: ARRAY OF CHAR; n: LONGINT): BOOLEAN;
-VAR i, v: LONGINT;
+VAR fd, got, r: LONGINT; path: ARRAY 16 OF CHAR;
 BEGIN
   IF (n < 0) OR (n > LEN(buf)) THEN RETURN FALSE END;
-  i := 0;
-  WHILE i < n DO
-    v := Random.Val(0, 255);
-    IF v < 0 THEN v := -v END;
-    buf[i] := CHR(SHORT(v MOD 256));
-    INC(i)
+  IF n = 0 THEN RETURN TRUE END;
+  path := "/dev/urandom";
+  fd := Linux0.Openat0(Linux0.ATFDCWD, SYSTEM.ADR(path[0]), Linux0.ORDonly, 0);
+  IF fd < 0 THEN RETURN FALSE END;
+  got := 0; r := 1;
+  WHILE (got < n) & (r > 0) DO
+    r := Linux0.Read0(fd, SYSTEM.ADR(buf[got]), n - got);
+    IF r > 0 THEN INC(got, r) END
   END;
-  RETURN TRUE
+  r := Linux0.Close0(fd);
+  RETURN got = n
 END Fill;
 
 END TLS13Random.

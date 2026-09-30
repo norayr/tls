@@ -8,6 +8,9 @@ CONST
   Finished* = 20;
 
 VAR
+  verbose*: BOOLEAN;  (** the handshake messages and the leaf certificate, for debugging *)
+
+VAR
   expectedHost: ARRAY 256 OF CHAR;
   expectedHostSet: BOOLEAN;
   capturedCerts: ARRAY 8 OF TLSBytes.Buffer;
@@ -97,34 +100,34 @@ BEGIN
       TLSBytes.Copy(der, capturedCerts[capturedCertCount]); INC(capturedCertCount)
     END
   END;
-  Out.String("  certificate message: len="); Out.Int(msg.len, 0); Out.Ln;
+  IF verbose THEN Out.String("  certificate message: len="); Out.Int(msg.len, 0); Out.Ln END;
   IF TLS13Certs.FirstCertificate(msg, leaf) THEN
-    Out.String("  leaf cert DER len="); Out.Int(leaf.len, 0); Out.Ln;
+    IF verbose THEN Out.String("  leaf cert DER len="); Out.Int(leaf.len, 0); Out.Ln END;
     IF TLSX509.ParseCertificate(leaf, info) THEN
-      Out.String("  leaf X509 parse OK"); Out.Ln;
-      Out.String("  tbs len="); Out.Int(info.tbs.len, 0); Out.Ln;
-      Out.String("  issuer len="); Out.Int(info.issuer.len, 0); Out.Ln;
-      Out.String("  subject len="); Out.Int(info.subject.len, 0); Out.Ln;
-      Out.String("  validity len="); Out.Int(info.validity.len, 0); Out.Ln;
-      Out.String("  spki len="); Out.Int(info.spki.len, 0); Out.Ln;
-      PrintOID("  cert sig alg OID=", info.sigAlgOID);
-      PrintOID("  public key alg OID=", info.pubAlgOID);
-      Out.String("  signature len="); Out.Int(info.signature.len, 0); Out.String(" unusedBits="); Out.Int(info.signatureUnusedBits, 0); Out.Ln;
+      IF verbose THEN Out.String("  leaf X509 parse OK"); Out.Ln END;
+      IF verbose THEN Out.String("  tbs len="); Out.Int(info.tbs.len, 0); Out.Ln END;
+      IF verbose THEN Out.String("  issuer len="); Out.Int(info.issuer.len, 0); Out.Ln END;
+      IF verbose THEN Out.String("  subject len="); Out.Int(info.subject.len, 0); Out.Ln END;
+      IF verbose THEN Out.String("  validity len="); Out.Int(info.validity.len, 0); Out.Ln END;
+      IF verbose THEN Out.String("  spki len="); Out.Int(info.spki.len, 0); Out.Ln END;
+      IF verbose THEN PrintOID("  cert sig alg OID=", info.sigAlgOID) END;
+      IF verbose THEN PrintOID("  public key alg OID=", info.pubAlgOID) END;
+      IF verbose THEN Out.String("  signature len="); Out.Int(info.signature.len, 0); Out.String(" unusedBits="); Out.Int(info.signatureUnusedBits, 0); Out.Ln END;
       IF expectedHostSet THEN
-        Out.String("  hostname check for "); Out.String(expectedHost); Out.String(" = ");
+        IF verbose THEN Out.String("  hostname check for "); Out.String(expectedHost); Out.String(" = ") END;
         capturedHostOK := TLSX509Names.CertMatchesHostname(leaf, expectedHost);
         IF capturedHostOK THEN
-          Out.String("OK")
+          IF verbose THEN Out.String("OK") END
         ELSE
-          Out.String("FAIL")
+          IF verbose THEN Out.String("FAIL") END
         END;
-        Out.Ln
+        IF verbose THEN Out.Ln END
       END
     ELSE
-      Out.String("  leaf X509 parse FAIL"); Out.Ln
+      IF verbose THEN Out.String("  leaf X509 parse FAIL"); Out.Ln END
     END
   ELSE
-    Out.String("  no leaf certificate extracted"); Out.Ln
+    IF verbose THEN Out.String("  no leaf certificate extracted"); Out.Ln END
   END
 END DebugCertificateMessage;
 
@@ -164,7 +167,7 @@ BEGIN
         parsing := FALSE
       ELSE
         typ := MessageType(partial, pos);
-        Out.String("  hs msg type="); Out.Int(typ, 0); Out.String(" total="); Out.Int(total, 0); Out.String(" transcript before="); Out.Int(transcript.len, 0); Out.Ln;
+        IF verbose THEN Out.String("  hs msg type="); Out.Int(typ, 0); Out.String(" total="); Out.Int(total, 0); Out.String(" transcript before="); Out.Int(transcript.len, 0); Out.Ln END;
         TLSBytes.Slice(partial, pos, total, msg);
 
         IF typ = Certificate THEN
@@ -176,11 +179,11 @@ BEGIN
           finishedOK := TLS13Finished.VerifyFinishedMessage(msg, serverFinishedKey, th);
           sawFinished := TRUE;
           TLSBytes.Append(transcript, msg);
-          Out.String("  server Finished verified="); IF finishedOK THEN Out.String("true") ELSE Out.String("false") END; Out.String(" transcript after="); Out.Int(transcript.len, 0); Out.Ln;
+          IF verbose THEN Out.String("  server Finished verified="); IF finishedOK THEN Out.String("true") ELSE Out.String("false") END; Out.String(" transcript after="); Out.Int(transcript.len, 0); Out.Ln END;
           IF ~finishedOK THEN RETURN FALSE END
         ELSE
           TLSBytes.Append(transcript, msg);
-          Out.String("  transcript after="); Out.Int(transcript.len, 0); Out.Ln
+          IF verbose THEN Out.String("  transcript after="); Out.Int(transcript.len, 0); Out.Ln END
         END;
 
         INC(pos, total)
@@ -232,5 +235,5 @@ BEGIN
 END BuildEmptyEncryptedExtensions;
 
 BEGIN
-  ClearExpectedHost; ResetCapturedCerts
+  verbose := FALSE; ClearExpectedHost; ResetCapturedCerts
 END TLS13EncHandshake.
