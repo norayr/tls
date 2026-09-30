@@ -1,4 +1,4 @@
-MODULE TLS13EncryptedHandshake;
+MODULE TLS13EncHandshake;
 IMPORT Out, TLSBytes, TLS13Records, TLS13Keys, TLS13Finished, TLS13Certs, TLSX509, TLSX509Names;
 
 CONST
@@ -200,7 +200,7 @@ BEGIN
   RETURN ProcessServerHandshakeBuffered(plain, scratch, transcript, serverFinishedKey, sawFinished, finishedOK)
 END ProcessServerHandshakePlain;
 
-PROCEDURE OpenServerHandshakeRecord*(VAR serverKey, serverIV: TLSBytes.Buffer; seq: HUGEINT;
+PROCEDURE OpenServerHandshakeRecord*(VAR serverKey, serverIV: TLSBytes.Buffer; seq: LONGINT;
                                     VAR record, transcript, serverFinishedKey: TLSBytes.Buffer;
                                     VAR sawFinished, finishedOK: BOOLEAN): BOOLEAN;
 VAR innerType: LONGINT; plain, partial: TLSBytes.Buffer;
@@ -212,7 +212,7 @@ BEGIN
   RETURN ProcessServerHandshakeBuffered(plain, partial, transcript, serverFinishedKey, sawFinished, finishedOK)
 END OpenServerHandshakeRecord;
 
-PROCEDURE OpenServerHandshakeRecordBuffered*(VAR serverKey, serverIV: TLSBytes.Buffer; seq: HUGEINT;
+PROCEDURE OpenServerHandshakeRecordBuf*(VAR serverKey, serverIV: TLSBytes.Buffer; seq: LONGINT;
                                             VAR record, partial, transcript, serverFinishedKey: TLSBytes.Buffer;
                                             VAR sawFinished, finishedOK: BOOLEAN): BOOLEAN;
 VAR innerType: LONGINT; plain: TLSBytes.Buffer;
@@ -221,7 +221,7 @@ BEGIN
   IF ~TLS13Records.OpenRecord(serverKey, serverIV, seq, record, innerType, plain) THEN RETURN FALSE END;
   IF innerType # TLS13Records.Handshake THEN RETURN FALSE END;
   RETURN ProcessServerHandshakeBuffered(plain, partial, transcript, serverFinishedKey, sawFinished, finishedOK)
-END OpenServerHandshakeRecordBuffered;
+END OpenServerHandshakeRecordBuf;
 
 PROCEDURE BuildEmptyEncryptedExtensions*(VAR msg: TLSBytes.Buffer);
 BEGIN
@@ -233,4 +233,4 @@ END BuildEmptyEncryptedExtensions;
 
 BEGIN
   ClearExpectedHost; ResetCapturedCerts
-END TLS13EncryptedHandshake.
+END TLS13EncHandshake.

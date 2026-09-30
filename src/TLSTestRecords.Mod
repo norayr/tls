@@ -114,23 +114,23 @@ BEGIN
   SayResult(ok & (typ = TLS13Records.Handshake) & BufferEqualsString(plain, "abc"))
 END TestPadding;
 
-PROCEDURE TestSeq64;
-VAR key, iv, msg, rec, plain: TLSBytes.Buffer; typ: LONGINT; ok: BOOLEAN; seq: HUGEINT;
+PROCEDURE TestSeqLarge;  (* the largest sequence number, 2^31 - 1 *)
+VAR key, iv, msg, rec, plain: TLSBytes.Buffer; typ: LONGINT; ok: BOOLEAN; seq: LONGINT;
 BEGIN
   FillBufferFromHex(key, "00000000000000000000000000000000");
   FillBufferFromHex(iv,  "000000000000000000000000");
   FillBufferFromString(msg, "hello64");
-  seq := 4294967296;
+  seq := 2147483647;
   TLS13Records.ProtectRecord(key, iv, seq, TLS13Records.ApplicationData, msg, rec);
   ok := TLS13Records.OpenRecord(key, iv, seq, rec, typ, plain);
-  Out.String("seq64 open   = "); IF ok THEN Out.String("true") ELSE Out.String("false") END; Out.Ln;
+  Out.String("seq max open = "); IF ok THEN Out.String("true") ELSE Out.String("false") END; Out.Ln;
   SayResult(ok & (typ = TLS13Records.ApplicationData) & BufferEqualsString(plain, "hello64"))
-END TestSeq64;
+END TestSeqLarge;
 
 BEGIN
   TestRecordRoundTrip;
   TestTamperReject;
   TestSeqChangesCiphertext;
-  TestSeq64;
+  TestSeqLarge;
   TestPadding
 END TLSTestRecords.

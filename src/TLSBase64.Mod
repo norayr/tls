@@ -54,12 +54,14 @@ BEGIN
   srcLength := Strings.Length(src);
 
   WHILE i < srcLength DO
-    FOR k := 0 TO 2 DO
+    k := 0;
+    WHILE k <= 2 DO
       IF i+k < srcLength THEN
         block[k] := ORD(src[i+k])
       ELSE
         block[k] := 0
-      END
+      END;
+      INC(k)
     END;
 
     enc[0] := block[0] DIV 4;
@@ -73,7 +75,8 @@ BEGIN
       pad := 0
     END;
 
-    FOR k := 0 TO 3 DO
+    k := 0;
+    WHILE k <= 3 DO
       IF j+k < dstLen THEN
         IF k >= 4 - pad THEN
           dst[j+k] := "="
@@ -82,8 +85,9 @@ BEGIN
         END
       ELSE
         Out.String("destination capacity is not enough to fit base64 encoded string"); Out.Ln;
-        HALT(5)
-      END
+        HALT(100)
+      END;
+      INC(k)
     END;
 
     INC(i, 3);
@@ -144,11 +148,11 @@ BEGIN
   ok := DecodeToBuffer(src, b);
   IF ~ok THEN
     Out.String("Invalid character in Base64 encoded string"); Out.Ln;
-    HALT(5)
+    HALT(100)
   END;
   IF b.len >= LEN(dst) THEN
     Out.String("destination capacity is not enough to fit base64 decoded string"); Out.Ln;
-    HALT(5)
+    HALT(100)
   END;
   i := 0;
   WHILE i < b.len DO

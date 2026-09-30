@@ -47,12 +47,16 @@ build_deps:
 buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/BIT.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSBytes.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestBytes.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSSHA256.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSHKDF.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestSHA256.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestHKDF.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX25519.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestCrypto.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSAESGCM.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestAESGCM.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestGCM.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Records.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestRecords.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Handshake.Mod
@@ -81,10 +85,10 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Chain.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Names.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Names.Mod
-	cd $(BUILD) && $(VOC) -s ../src/TLS13EncryptedHandshake.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestEncryptedHandshake.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLS13EncHandshake.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestEncHandshake.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13ClientFinished.Mod
-	cd $(BUILD) && $(VOC) -m ../src/TLSTestClientFinished.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestClientFin.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Application.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestApplication.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13Random.Mod

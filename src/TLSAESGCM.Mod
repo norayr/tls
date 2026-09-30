@@ -235,7 +235,7 @@ BEGIN
 END GHASHBlocks;
 
 PROCEDURE BuildGHASHInput(VAR aad, cipher: TLSBytes.Buffer; VAR data: TLSBytes.Buffer);
-VAR pad, i: LONGINT; h: HUGEINT;
+VAR pad, i: LONGINT;
 BEGIN
   TLSBytes.Init(data);
   TLSBytes.Append(data, aad);
@@ -244,8 +244,8 @@ BEGIN
   TLSBytes.Append(data, cipher);
   pad := (16 - (cipher.len MOD 16)) MOD 16;
   i := 0; WHILE i < pad DO TLSBytes.AppendByte(data, 0); INC(i) END;
-  h := aad.len; TLSBytes.PutBE64(data, h * 8);
-  h := cipher.len; TLSBytes.PutBE64(data, h * 8)
+  TLSBytes.PutBE64(data, 0, aad.len * 8);  (* lengths in bits; the buffers are at most TLSBytes.MaxLen *)
+  TLSBytes.PutBE64(data, 0, cipher.len * 8)
 END BuildGHASHInput;
 
 PROCEDURE CalcTag(VAR key, nonce, aad, cipher: TLSBytes.Buffer; VAR tag: Block);

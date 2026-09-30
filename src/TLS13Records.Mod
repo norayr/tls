@@ -21,11 +21,11 @@ BEGIN
   TLSBytes.PutBE16(aad, encryptedLen)
 END BuildAAD;
 
-PROCEDURE MakeNonce*(VAR staticIV: TLSBytes.Buffer; seq: HUGEINT; VAR nonce: TLSBytes.Buffer);
+PROCEDURE MakeNonce*(VAR staticIV: TLSBytes.Buffer; seq: LONGINT; VAR nonce: TLSBytes.Buffer);
 VAR seqBytes: TLSBytes.Buffer;
 BEGIN
   IF staticIV.len # 12 THEN HALT(80) END;
-  TLSBytes.SeqNum12H(seq, seqBytes);
+  TLSBytes.SeqNum12(seq, seqBytes);  (* 2^31 records per direction are plenty *)
   TLSBytes.Xor12(staticIV, seqBytes, nonce)
 END MakeNonce;
 
@@ -37,7 +37,7 @@ BEGIN
   TLSBytes.PutBE16(dst, length)
 END AppendHeader;
 
-PROCEDURE ProtectRecord*(VAR key, staticIV: TLSBytes.Buffer; seq: HUGEINT; innerType: LONGINT; VAR plain: TLSBytes.Buffer; VAR record: TLSBytes.Buffer);
+PROCEDURE ProtectRecord*(VAR key, staticIV: TLSBytes.Buffer; seq: LONGINT; innerType: LONGINT; VAR plain: TLSBytes.Buffer; VAR record: TLSBytes.Buffer);
 VAR nonce, aad, inner, encrypted: TLSBytes.Buffer;
 BEGIN
   TLSBytes.Copy(plain, inner);
@@ -50,7 +50,7 @@ BEGIN
   TLSBytes.Append(record, encrypted)
 END ProtectRecord;
 
-PROCEDURE ProtectRecordPadded*(VAR key, staticIV: TLSBytes.Buffer; seq: HUGEINT; innerType, paddingLen: LONGINT; VAR plain: TLSBytes.Buffer; VAR record: TLSBytes.Buffer);
+PROCEDURE ProtectRecordPadded*(VAR key, staticIV: TLSBytes.Buffer; seq: LONGINT; innerType, paddingLen: LONGINT; VAR plain: TLSBytes.Buffer; VAR record: TLSBytes.Buffer);
 VAR nonce, aad, inner, encrypted: TLSBytes.Buffer; i: LONGINT;
 BEGIN
   TLSBytes.Copy(plain, inner);
@@ -65,7 +65,7 @@ BEGIN
   TLSBytes.Append(record, encrypted)
 END ProtectRecordPadded;
 
-PROCEDURE OpenRecord*(VAR key, staticIV: TLSBytes.Buffer; seq: HUGEINT; VAR record: TLSBytes.Buffer; VAR innerType: LONGINT; VAR plain: TLSBytes.Buffer): BOOLEAN;
+PROCEDURE OpenRecord*(VAR key, staticIV: TLSBytes.Buffer; seq: LONGINT; VAR record: TLSBytes.Buffer; VAR innerType: LONGINT; VAR plain: TLSBytes.Buffer): BOOLEAN;
 VAR length, i: LONGINT; nonce, aad, encrypted, inner: TLSBytes.Buffer;
 BEGIN
   TLSBytes.Init(plain); innerType := -1;

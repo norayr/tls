@@ -21,20 +21,20 @@ BEGIN
   TLS13Keys.TrafficIV(sSec, serverIV)
 END ApplicationKeys;
 
-PROCEDURE ProtectApplicationData*(VAR key, iv: TLSBytes.Buffer; seq: HUGEINT;
+PROCEDURE ProtectApplicationData*(VAR key, iv: TLSBytes.Buffer; seq: LONGINT;
                                   VAR payload: TLSBytes.Buffer; VAR record: TLSBytes.Buffer);
 BEGIN
   TLS13Records.ProtectRecord(key, iv, seq, TLS13Records.ApplicationData, payload, record)
 END ProtectApplicationData;
 
-PROCEDURE ProtectApplicationDataPadded*(VAR key, iv: TLSBytes.Buffer; seq: HUGEINT;
+PROCEDURE ProtectApplicationDataPadded*(VAR key, iv: TLSBytes.Buffer; seq: LONGINT;
                                         paddingLen: LONGINT;
                                         VAR payload: TLSBytes.Buffer; VAR record: TLSBytes.Buffer);
 BEGIN
   TLS13Records.ProtectRecordPadded(key, iv, seq, TLS13Records.ApplicationData, paddingLen, payload, record)
 END ProtectApplicationDataPadded;
 
-PROCEDURE OpenApplicationData*(VAR key, iv: TLSBytes.Buffer; seq: HUGEINT;
+PROCEDURE OpenApplicationData*(VAR key, iv: TLSBytes.Buffer; seq: LONGINT;
                                VAR record: TLSBytes.Buffer; VAR payload: TLSBytes.Buffer): BOOLEAN;
 VAR innerType: LONGINT;
 BEGIN

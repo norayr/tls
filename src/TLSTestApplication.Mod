@@ -1,5 +1,5 @@
 MODULE TLSTestApplication;
-IMPORT Out, TLSBytes, TLS13Keys, TLS13Finished, TLS13EncryptedHandshake, TLS13ClientFinished, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64,
+IMPORT Out, TLSBytes, TLS13Keys, TLS13Finished, TLS13EncHandshake, TLS13ClientFinished, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64,
        TLS13Application;
 
 PROCEDURE HexDigit(n: LONGINT): CHAR;
@@ -62,7 +62,7 @@ BEGIN
   TLS13Keys.HashMessages(transcript0, th);
   TLS13Keys.HandshakeKeys(shared, th, clientKey, clientIV, serverKey, serverIV, clientFinKey, serverFinKey);
 
-  TLS13EncryptedHandshake.BuildEmptyEncryptedExtensions(ee);
+  TLS13EncHandshake.BuildEmptyEncryptedExtensions(ee);
   TLSBytes.Copy(transcript0, transcriptAfterClient);
   TLSBytes.Append(transcriptAfterClient, ee);
   TLS13Keys.HashMessages(transcriptAfterClient, th);

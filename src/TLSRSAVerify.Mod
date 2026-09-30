@@ -117,7 +117,7 @@ BEGIN
   RETURN ok
 END VerifyPKCS1SHA256;
 
-PROCEDURE VerifyCertificateSignatureSHA256RSA*(VAR leafDER, issuerDER: TLSBytes.Buffer): BOOLEAN;
+PROCEDURE VerifyCertSignatureSHA256RSA*(VAR leafDER, issuerDER: TLSBytes.Buffer): BOOLEAN;
 VAR leaf, issuer: TLSX509.CertInfo; modulus, exponent: TLSBytes.Buffer; ok: BOOLEAN;
 BEGIN
   ok := TRUE;
@@ -127,6 +127,6 @@ BEGIN
   IF ok THEN IF ~ParseRSAPublicKeyFromSPKI(issuer.spki, modulus, exponent) THEN ok := FALSE END END;
   IF ok THEN ok := VerifyPKCS1SHA256(modulus, exponent, leaf.tbs, leaf.signature) END;
   RETURN ok
-END VerifyCertificateSignatureSHA256RSA;
+END VerifyCertSignatureSHA256RSA;
 
 END TLSRSAVerify.

@@ -1,5 +1,5 @@
-MODULE TLSTestClientFinished;
-IMPORT Out, TLSBytes, TLS13Keys, TLS13Records, TLS13Finished, TLS13EncryptedHandshake, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64, TLS13ClientFinished;
+MODULE TLSTestClientFin;
+IMPORT Out, TLSBytes, TLS13Keys, TLS13Records, TLS13Finished, TLS13EncHandshake, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64, TLS13ClientFinished;
 
 PROCEDURE HexDigit(n: LONGINT): CHAR;
 BEGIN
@@ -43,7 +43,7 @@ BEGIN
   TLS13Keys.HashMessages(transcript0, th);
   TLS13Keys.HandshakeKeys(shared, th, clientKey, clientIV, serverKey, serverIV, clientFinKey, serverFinKey);
 
-  TLS13EncryptedHandshake.BuildEmptyEncryptedExtensions(ee);
+  TLS13EncHandshake.BuildEmptyEncryptedExtensions(ee);
   TLSBytes.Copy(transcript0, transcriptAfterServer);
   TLSBytes.Append(transcriptAfterServer, ee);
   TLS13Keys.HashMessages(transcriptAfterServer, th);
@@ -55,7 +55,7 @@ BEGIN
   TLS13Records.ProtectRecord(serverKey, serverIV, 0, TLS13Records.Handshake, plain, record);
 
   TLSBytes.Copy(transcript0, transcriptAfterServer);
-  RETURN TLS13EncryptedHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 0, record, transcriptAfterServer, serverFinKey, saw, ok) & saw & ok
+  RETURN TLS13EncHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 0, record, transcriptAfterServer, serverFinKey, saw, ok) & saw & ok
 END BuildServerSide;
 
 PROCEDURE TestClientFinished;
@@ -102,4 +102,4 @@ END TestClientFinished;
 
 BEGIN
   TestClientFinished
-END TLSTestClientFinished.
+END TLSTestClientFin.

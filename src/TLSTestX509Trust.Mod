@@ -31,7 +31,8 @@ VAR p: LONGINT;
 BEGIN
   p := 0;
   AppendText(LeafPEM, p, "-----BEGIN CERTIFICATE-----"); AppendLF(LeafPEM, p);
-  AppendText(LeafPEM, p, "MIGIMHKgAwIBAgIBAjANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDEwdUZXN0IENBMB4XDTI0MDEwMTAwMDAwMFoXDTMwMDEwMTAwMDAwMFowDzENMAsGA1UEAxMETGVhZjAUMA0GCSqGSIb3DQEBAQUAAwMAMAAwDQYJKoZIhvcNAQELBQADAwCquw=="); AppendLF(LeafPEM, p);
+  AppendText(LeafPEM, p, "MIGIMHKgAwIBAgIBAjANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDEwdUZXN0IENBMB4XDTI0MDEwMTAwMDAwMFoXDTMwMDEwMTAw");
+  AppendText(LeafPEM, p, "MDAwMFowDzENMAsGA1UEAxMETGVhZjAUMA0GCSqGSIb3DQEBAQUAAwMAMAAwDQYJKoZIhvcNAQELBQADAwCquw=="); AppendLF(LeafPEM, p);
   AppendText(LeafPEM, p, "-----END CERTIFICATE-----"); AppendLF(LeafPEM, p)
 END BuildLeafPEM;
 
@@ -40,7 +41,8 @@ VAR p: LONGINT;
 BEGIN
   p := 0;
   AppendText(BundlePEM, p, "-----BEGIN CERTIFICATE-----"); AppendLF(BundlePEM, p);
-  AppendText(BundlePEM, p, "MIGLMHWgAwIBAgIBATANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDEwdUZXN0IENBMB4XDTI0MDEwMTAwMDAwMFoXDTMwMDEwMTAwMDAwMFowEjEQMA4GA1UEAxMHVGVzdCBDQTAUMA0GCSqGSIb3DQEBAQUAAwMAMAAwDQYJKoZIhvcNAQELBQADAwCquw=="); AppendLF(BundlePEM, p);
+  AppendText(BundlePEM, p, "MIGLMHWgAwIBAgIBATANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDEwdUZXN0IENBMB4XDTI0MDEwMTAwMDAwMFoXDTMwMDEwMTAw");
+  AppendText(BundlePEM, p, "MDAwMFowEjEQMA4GA1UEAxMHVGVzdCBDQTAUMA0GCSqGSIb3DQEBAQUAAwMAMAAwDQYJKoZIhvcNAQELBQADAwCquw=="); AppendLF(BundlePEM, p);
   AppendText(BundlePEM, p, "-----END CERTIFICATE-----"); AppendLF(BundlePEM, p)
 END BuildBundlePEM;
 
@@ -84,7 +86,7 @@ BEGIN
   Say("ca self-issued", TLSX509Trust.IsSelfIssued(caInfo));
 
   TLSX509Validity.SetTime(now, 2026, 6, 1, 0, 0, 0);
-  ok := TLSX509Trust.CheckLeafWithBundleByNameAndTime(leafDER, BundlePEM, now, res);
+  ok := TLSX509Trust.CheckLeafWithBundleNameTime(leafDER, BundlePEM, now, res);
   Say("bundle name+time trust", ok);
   Say("issuer found", res.issuerFound);
   Say("issuer self", res.issuerSelfIssued);

@@ -141,9 +141,9 @@ BEGIN
   TLSBytes.Copy(leafDER, badLeafDER);
   badLeafDER.data[badLeafDER.len-1] := TLSBytes.Byte(ORD(badLeafDER.data[badLeafDER.len-1]) + 1);
   TLSX509Validity.SetTime(now, 2026, 1, 1, 0, 0, 0);
-  PrintResult("trust direct sig", TLSX509Trust.CheckLeafWithIssuerByNameTimeAndSignature(leafDER, issuerDER, now, res));
+  PrintResult("trust direct sig", TLSX509Trust.CheckLeafWithIssuerNameTimeSig(leafDER, issuerDER, now, res));
   PrintResult("signature ok field", res.signaturesOK);
   PrintResult("name+time ok field", res.trustedByNameAndTime);
-  PrintResult("bad signature reject", ~TLSX509Trust.CheckLeafWithIssuerByNameTimeAndSignature(badLeafDER, issuerDER, now, res));
+  PrintResult("bad signature reject", ~TLSX509Trust.CheckLeafWithIssuerNameTimeSig(badLeafDER, issuerDER, now, res));
   PrintResult("bad sig field false", ~res.signaturesOK)
 END TLSTestX509TrustSig.

@@ -2,7 +2,7 @@ MODULE TLS13Live;
 IMPORT SYSTEM, Platform, Out, Strings,
        Internet, TLSBytes, TLS13Random, TLSX25519,
        TLS13Handshake, TLS13Keys, TLS13Records,
-       TLS13EncryptedHandshake, TLS13ClientFinished, TLS13Application,
+       TLS13EncHandshake, TLS13ClientFinished, TLS13Application,
        TLSCABundle, TLSX509Validity, TLSNow, TLSX509Chain;
 
 TYPE
@@ -11,7 +11,7 @@ TYPE
     connected*: BOOLEAN;
     handshakeDone*: BOOLEAN;
     clientAppKey*, clientAppIV*, serverAppKey*, serverAppIV*: TLSBytes.Buffer;
-    clientAppSeq*, serverAppSeq*: HUGEINT;
+    clientAppSeq*, serverAppSeq*: LONGINT;
     pending: TLSBytes.Buffer;
     pendingPos: LONGINT
   END;
@@ -132,18 +132,18 @@ VAR
   res: TLSX509Chain.Result;
   ok: BOOLEAN;
 BEGIN
-  n := TLS13EncryptedHandshake.CapturedCertCount();
+  n := TLS13EncHandshake.CapturedCertCount();
   Out.String("TLS13Live: captured cert count="); Out.Int(n, 0); Out.Ln;
   i := 0;
   WHILE i < LEN(certs) DO TLSBytes.Init(certs[i]); INC(i) END;
   i := 0;
   WHILE (i < n) & (i < LEN(certs)) DO
-    IF ~TLS13EncryptedHandshake.GetCapturedCert(i, certs[i]) THEN RETURN FALSE END;
+    IF ~TLS13EncHandshake.GetCapturedCert(i, certs[i]) THEN RETURN FALSE END;
     INC(i)
   END;
 
   Out.String("TLS13Live: hostname verified = ");
-  IF TLS13EncryptedHandshake.HostnameOK() THEN Out.String("OK") ELSE Out.String("FAIL") END;
+  IF TLS13EncHandshake.HostnameOK() THEN Out.String("OK") ELSE Out.String("FAIL") END;
   Out.Ln;
 
   IF ~TLSCABundle.LoadDefault(ca) THEN
@@ -168,7 +168,7 @@ BEGIN
   (* For this first live integration we report the result but only require
      hostname success; real hard-fail on chain trust comes after we add the
      missing signature algorithms seen in the wild. *)
-  RETURN TLS13EncryptedHandshake.HostnameOK()
+  RETURN TLS13EncHandshake.HostnameOK()
 END CheckCapturedCertificateChain;
 
 PROCEDURE Connect*(host, port: ARRAY OF CHAR; VAR s: State): BOOLEAN;
@@ -180,10 +180,10 @@ VAR
   cHsKey, cHsIV, sHsKey, sHsIV, cFinKey, sFinKey: TLSBytes.Buffer;
   hsSecret, masterSecret, clientFinishedRec, clientFinishedMsg, thServerFinished: TLSBytes.Buffer;
   sawFinished, finishedOK: BOOLEAN;
-  serverHSSeq, clientHSSeq: HUGEINT;
+  serverHSSeq, clientHSSeq: LONGINT;
 BEGIN
   Init(s);
-  TLS13EncryptedHandshake.SetExpectedHost(host);
+  TLS13EncHandshake.SetExpectedHost(host);
   IF ~Internet.Connect(host, port, s.fd) THEN RETURN FALSE END;
   s.connected := TRUE;
 
@@ -222,7 +222,7 @@ BEGIN
   WHILE ~sawFinished DO
     IF ~NextNonCCS(s.fd, rec) THEN Out.String("TLS13Live: failed reading encrypted handshake record"); Out.Ln; RETURN FALSE END;
     DumpRecordInfo("encrypted server hs rec", rec);
-    IF ~TLS13EncryptedHandshake.OpenServerHandshakeRecordBuffered(sHsKey, sHsIV, serverHSSeq, rec, serverFrag, th, sFinKey, sawFinished, finishedOK) THEN Out.String("TLS13Live: decrypt/process encrypted server handshake failed at seq "); Out.Int(serverHSSeq, 0); Out.Ln; RETURN FALSE END;
+    IF ~TLS13EncHandshake.OpenServerHandshakeRecordBuf(sHsKey, sHsIV, serverHSSeq, rec, serverFrag, th, sFinKey, sawFinished, finishedOK) THEN Out.String("TLS13Live: decrypt/process encrypted server handshake failed at seq "); Out.Int(serverHSSeq, 0); Out.Ln; RETURN FALSE END;
     Out.String("  buffered hs fragment bytes="); Out.Int(serverFrag.len, 0); Out.Ln;
     INC(serverHSSeq)
   END;

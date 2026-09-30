@@ -1,5 +1,5 @@
-MODULE TLSTestEncryptedHandshake;
-IMPORT Out, TLSBytes, TLS13Keys, TLS13Records, TLS13Finished, TLS13EncryptedHandshake, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64;
+MODULE TLSTestEncHandshake;
+IMPORT Out, TLSBytes, TLS13Keys, TLS13Records, TLS13Finished, TLS13EncHandshake, TLS13Certs, TLSX509, TLSASN1, TLSPEM, TLSBase64;
 
 PROCEDURE HexDigit(n: LONGINT): CHAR;
 BEGIN
@@ -49,7 +49,7 @@ BEGIN
   TLS13Keys.HashMessages(transcript0, th);
   TLS13Keys.HandshakeKeys(shared, th, clientKey, clientIV, serverKey, serverIV, clientFinKey, serverFinKey);
 
-  TLS13EncryptedHandshake.BuildEmptyEncryptedExtensions(ee);
+  TLS13EncHandshake.BuildEmptyEncryptedExtensions(ee);
   TLSBytes.Copy(transcript0, transcriptForFinished);
   TLSBytes.Append(transcriptForFinished, ee);
   TLS13Keys.HashMessages(transcriptForFinished, th);
@@ -64,7 +64,7 @@ BEGIN
   SayResult((record.len > 5) & (ORD(record.data[0]) = TLS13Records.ApplicationData));
 
   TLSBytes.Copy(transcript0, transcriptAfter);
-  opened := TLS13EncryptedHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 0, record, transcriptAfter, serverFinKey, saw, ok);
+  opened := TLS13EncHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 0, record, transcriptAfter, serverFinKey, saw, ok);
   Out.String("open server  = "); SayResult(opened);
   Out.String("saw finished = "); SayResult(saw);
   Out.String("finish valid = "); SayResult(ok);
@@ -75,8 +75,8 @@ BEGIN
   Out.String("inner type   = "); SayResult(opened & (innerType = TLS13Records.Handshake));
   Out.String("plain parse  = ");
   n := 0;
-  IF TLS13EncryptedHandshake.MessageTotalLen(plain, 0, n) THEN
-    SayResult((TLS13EncryptedHandshake.MessageType(plain, 0) = TLS13EncryptedHandshake.EncryptedExtensions) & (n = ee.len))
+  IF TLS13EncHandshake.MessageTotalLen(plain, 0, n) THEN
+    SayResult((TLS13EncHandshake.MessageType(plain, 0) = TLS13EncHandshake.EncryptedExtensions) & (n = ee.len))
   ELSE
     SayResult(FALSE)
   END;
@@ -84,14 +84,14 @@ BEGIN
   TLSBytes.Copy(record, tampered);
   tampered.data[tampered.len - 1] := CHR((ORD(tampered.data[tampered.len - 1]) + 1) MOD 256);
   TLSBytes.Copy(transcript0, transcriptAfter);
-  opened := TLS13EncryptedHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 0, tampered, transcriptAfter, serverFinKey, saw, ok);
+  opened := TLS13EncHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 0, tampered, transcriptAfter, serverFinKey, saw, ok);
   Out.String("tamper rej   = "); SayResult(~opened);
 
   TLSBytes.Copy(transcript0, transcriptAfter);
-  opened := TLS13EncryptedHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 1, record, transcriptAfter, serverFinKey, saw, ok);
+  opened := TLS13EncHandshake.OpenServerHandshakeRecord(serverKey, serverIV, 1, record, transcriptAfter, serverFinKey, saw, ok);
   Out.String("wrong seq rej= "); SayResult(~opened)
 END TestEncryptedHandshake;
 
 BEGIN
   TestEncryptedHandshake
-END TLSTestEncryptedHandshake.
+END TLSTestEncHandshake.

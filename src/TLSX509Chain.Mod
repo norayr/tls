@@ -82,7 +82,7 @@ END StepNameTimeOK;
 
 PROCEDURE StepSignatureOK(VAR childDER, issuerDER: TLSBytes.Buffer): BOOLEAN;
 BEGIN
-  RETURN TLSRSAVerify.VerifyCertificateSignatureSHA256RSA(childDER, issuerDER)
+  RETURN TLSRSAVerify.VerifyCertSignatureSHA256RSA(childDER, issuerDER)
 END StepSignatureOK;
 
 PROCEDURE CheckChainWithTrustAnchors*(VAR certs: ARRAY OF TLSBytes.Buffer; certCount: LONGINT; VAR roots: ARRAY OF TLSBytes.Buffer; rootCount: LONGINT; VAR now: TLSX509Validity.Time; VAR r: Result): BOOLEAN;
