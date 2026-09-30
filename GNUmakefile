@@ -57,6 +57,9 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/TLSNum.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestNum.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestNumBig.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSECDSA.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestECDSA256.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestECDSA384.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX25519.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX25519.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestCrypto.Mod
