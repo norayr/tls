@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+# gentestcerts.py dir: certificate chains for TLSTestChain (DER files, and PEM bundles of roots).
+# Valid from 2025 to 2035 unless said otherwise; the test takes 2026-06-01 as now.
+import sys, os, datetime
+from cryptography import x509
+from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, ObjectIdentifier
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
+
+out = sys.argv[1]
+os.makedirs(out, exist_ok=True)
+T0 = datetime.datetime(2025, 1, 1); T1 = datetime.datetime(2035, 1, 1)
+
+def name(cn): return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
+
+def cert(subject, key, issuer, ikey, h, ca=None, pathlen=None, ku=None, eku=None, san=None,
+         unknown_critical=False, t0=T0, t1=T1):
+    b = (x509.CertificateBuilder().subject_name(name(subject)).issuer_name(name(issuer))
+         .public_key(key.public_key()).serial_number(x509.random_serial_number())
+         .not_valid_before(t0).not_valid_after(t1))
+    if ca is not None:
+        b = b.add_extension(x509.BasicConstraints(ca=ca, path_length=pathlen), critical=True)
+    if ku is not None:
+        flags = dict(digital_signature=False, content_commitment=False, key_encipherment=False,
+                     data_encipherment=False, key_agreement=False, key_cert_sign=False, crl_sign=False,
+                     encipher_only=False, decipher_only=False)
+        flags.update(ku)
+        b = b.add_extension(x509.KeyUsage(**flags), critical=True)
+    if eku is not None: b = b.add_extension(x509.ExtendedKeyUsage(eku), critical=False)
+    if san is not None: b = b.add_extension(x509.SubjectAlternativeName([x509.DNSName(s) for s in san]), critical=False)
+    if unknown_critical:
+        b = b.add_extension(x509.UnrecognizedExtension(ObjectIdentifier("1.3.6.1.4.1.99999.1"), b"\x05\x00"), critical=True)
+    return b.sign(ikey, h)
+
+def save(fname, c): open(os.path.join(out, fname), 'wb').write(c.public_bytes(serialization.Encoding.DER))
+def pem(fname, *cs): open(os.path.join(out, fname), 'wb').write(b"".join(c.public_bytes(serialization.Encoding.PEM) for c in cs))
+
+CA_KU = dict(key_cert_sign=True, crl_sign=True)
+LEAF_KU = dict(digital_signature=True, key_encipherment=True)
+SERVER = [ExtendedKeyUsageOID.SERVER_AUTH]
+rsa_root_k = rsa.generate_private_key(65537, 2048); rsa_int_k = rsa.generate_private_key(65537, 2048)
+rsa_leaf_k = rsa.generate_private_key(65537, 2048)
+rsa_root = cert("RSA Root", rsa_root_k, "RSA Root", rsa_root_k, hashes.SHA256(), ca=True, ku=CA_KU)
+rsa_int = cert("RSA Intermediate", rsa_int_k, "RSA Root", rsa_root_k, hashes.SHA384(), ca=True, pathlen=0, ku=CA_KU)
+save("rsa_root.der", rsa_root); save("rsa_int.der", rsa_int); pem("rsa_roots.pem", rsa_root)
+save("rsa_leaf.der", cert("www.example.test", rsa_leaf_k, "RSA Intermediate", rsa_int_k, hashes.SHA256(),
+     ca=False, ku=LEAF_KU, eku=SERVER, san=["www.example.test", "*.shop.example.test"]))
+
+ec_root_k = ec.generate_private_key(ec.SECP384R1()); ec_int_k = ec.generate_private_key(ec.SECP256R1())
+ec_leaf_k = ec.generate_private_key(ec.SECP256R1())
+ec_root = cert("EC Root", ec_root_k, "EC Root", ec_root_k, hashes.SHA384(), ca=True, ku=CA_KU)
+ec_int = cert("EC Intermediate", ec_int_k, "EC Root", ec_root_k, hashes.SHA384(), ca=True, ku=CA_KU)
+save("ec_root.der", ec_root); save("ec_int.der", ec_int); pem("roots.pem", rsa_root, ec_root)
+save("ec_leaf.der", cert("ec.example.test", ec_leaf_k, "EC Intermediate", ec_int_k, hashes.SHA256(),
+     ca=False, ku=dict(digital_signature=True), eku=SERVER, san=["ec.example.test"]))
+
+bad_k = rsa.generate_private_key(65537, 2048)
+# an intermediate that is not a CA, and the leaf it signed
+save("noca_int.der", cert("No CA", bad_k, "RSA Root", rsa_root_k, hashes.SHA256(), ca=False, ku=CA_KU))
+save("noca_leaf.der", cert("a.example.test", rsa_leaf_k, "No CA", bad_k, hashes.SHA256(), eku=SERVER, san=["a.example.test"]))
+# a CA without keyCertSign
+save("nokcs_int.der", cert("No KCS", bad_k, "RSA Root", rsa_root_k, hashes.SHA256(), ca=True, ku=dict(digital_signature=True)))
+save("nokcs_leaf.der", cert("b.example.test", rsa_leaf_k, "No KCS", bad_k, hashes.SHA256(), eku=SERVER, san=["b.example.test"]))
+# path length: rsa_int allows 0 CAs below it; one more CA under it
+sub_k = rsa.generate_private_key(65537, 2048)
+save("sub_int.der", cert("Sub CA", sub_k, "RSA Intermediate", rsa_int_k, hashes.SHA256(), ca=True, ku=CA_KU))
+save("sub_leaf.der", cert("c.example.test", rsa_leaf_k, "Sub CA", sub_k, hashes.SHA256(), eku=SERVER, san=["c.example.test"]))
+# a leaf for clients only, one with an unknown critical extension, an expired one
+save("client_leaf.der", cert("d.example.test", rsa_leaf_k, "RSA Intermediate", rsa_int_k, hashes.SHA256(),
+     ku=LEAF_KU, eku=[ExtendedKeyUsageOID.CLIENT_AUTH], san=["d.example.test"]))
+save("crit_leaf.der", cert("e.example.test", rsa_leaf_k, "RSA Intermediate", rsa_int_k, hashes.SHA256(),
+     ku=LEAF_KU, eku=SERVER, san=["e.example.test"], unknown_critical=True))
+save("expired_leaf.der", cert("f.example.test", rsa_leaf_k, "RSA Intermediate", rsa_int_k, hashes.SHA256(),
+     ku=LEAF_KU, eku=SERVER, san=["f.example.test"], t0=datetime.datetime(2020, 1, 1), t1=datetime.datetime(2021, 1, 1)))
+# a leaf signed by the RSA leaf (a certificate that is not a CA)
+save("byleaf_leaf.der", cert("g.example.test", bad_k, "www.example.test", rsa_leaf_k, hashes.SHA256(),
+     eku=SERVER, san=["g.example.test"]))
+# a wildcard for a whole top level domain
+save("tld_leaf.der", cert("tld", rsa_leaf_k, "RSA Intermediate", rsa_int_k, hashes.SHA256(),
+     ku=LEAF_KU, eku=SERVER, san=["*.test"]))
+print("written to", out)
