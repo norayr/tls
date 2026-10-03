@@ -1,6 +1,7 @@
 MODULE TLSTestECDSA521;  (* ECDSA on secp521r1 against the Python cryptography package
-  (SHA-512 and SHA-256 hashes): valid signatures verify; a changed hash, r and s swapped, r = 0, r too
-  big and a public key off the curve do not *)
+  (two SHA-512 and one SHA-256 hash; three vectors: the ARM compiler takes 4 KB of strings): valid
+  signatures verify; a changed hash, r and s swapped, r = 0, r too big and a public key off the curve
+  do not *)
 
 IMPORT TLSBytes, TLSECDSA, Out;
 
@@ -94,52 +95,6 @@ BEGIN
   Add(der, "385711b1d6f1024200db1b34e696dd98d223de7523527893038cc432bb3d6f40");
   Add(der, "93d255714306616585695f537d13ec0ff7b7556c80f7ee0d3d456e7e954acae1");
   Add(der, "5f6ff594dd9eb52fa2ff");
-  Case(TLSECDSA.P521, 66);
-  Clear(pub);
-  Add(pub, "0401c33d664b5961eb818f0163ffa8a3ba88e69dcdea4fd98df03ea3271a0988");
-  Add(pub, "9530642db1c73eddd6fe3f5461d4d9134de2e015735e82d38a074aa462c51396");
-  Add(pub, "c7780300c8099dfa065a9f1e8fdc0725854620bd844209f7b9b15640081798ff");
-  Add(pub, "a897101205ecd3f38e983b0b797332c36ac465ef859ba6f39ca8fb46a0a0f1c5");
-  Add(pub, "36bdfec411");
-  Clear(h);
-  Add(h, "8a441c3cbf7ad23159e9917a609d1cab27e20242a96b2180a212d002f8dd6d00");
-  Clear(der);
-  Add(der, "3081870241374601a1f475104ddea911cec4bc46bbb0f17f1f823261de1f5aec");
-  Add(der, "3b075b1b1eb3c615a4f8ee698219091d852104e39463e97f4a3d35cee71227d7");
-  Add(der, "6c00f6a7a17e024200f99ee3c1418ad5b77b62ed092b56795ed3be5ca855c629");
-  Add(der, "d226996ceab8e62adda4e4fcfe264bdff4dfbedf82a39d256ff88f9cf4f67ef8");
-  Add(der, "71ea9efe608ee4ae6f35");
-  Case(TLSECDSA.P521, 66);
-  Clear(pub);
-  Add(pub, "040075dcf9a7c02f9a6f4a6a99741b4679af570c70558244a94d5dbf3129167c");
-  Add(pub, "858fdcb6a0e5adb01cb9d2755d6d99603dfb5181991b9034348f85d87c6dcdaf");
-  Add(pub, "e34f2c00fd7748cc1f224882e88ae77ace773ef8da62e5b3fb19dd058198334f");
-  Add(pub, "69588dddb5caae05d65e7ee320dbe4197a45d04ea53f13f87cb460f615eb84f5");
-  Add(pub, "058543564b");
-  Clear(h);
-  Add(h, "884a16b9f0a923f2c7a6c98f773fb500ae732a578812f1e1becc39e7b32ee52a");
-  Add(h, "3050ad64c3b8134ee3a81e6e5884c42392e9c0ce76fa5b2412e2c07dcd84f828");
-  Clear(der);
-  Add(der, "3081870242013842b87e0efe7a273fecbbf1de27556d75cf9c8db41e1b76b739");
-  Add(der, "288814fd9dd89b490404a219313204fc43a3cc745e0729acc2c7113f97085c49");
-  Add(der, "065f6c7bb086ed02412ba8be707daaf0760e745818ade94d54ec2ded86ad1d7f");
-  Add(der, "53e3bbd6d486219d0252b9a9d5a341191446183be1e2273f69564b2aadf058de");
-  Add(der, "587aac3e4141b984eb14");
-  Case(TLSECDSA.P521, 66);
-  Clear(pub);
-  Add(pub, "0401934ae0efa2aa74814e16fbd25fda0156d4ff56f6d6ad006ec86a30f0f321");
-  Add(pub, "db24ec3696c632835927ade6f713f30a86ff5369d6f05a4ce46bf67148ac9166");
-  Add(pub, "6017d6018a0836bef6cbe8d95bf85fbcd4ac9fecba08616daebfa39ec5a7f1df");
-  Add(pub, "c3a0d5aa6ec2b392df3da65fda3d241c7b8a48cee6f0e61a71532228bf5b290c");
-  Add(pub, "c5972bd0ff");
-  Clear(h);
-  Add(h, "7032f28f4c5c28e4d50ee125f07da2dd7af885dda03e86fafe4eaea2c063a7aa");
-  Clear(der);
-  Add(der, "3081880242019f36870fd22217570e21dad0edba69cecadb6e751282401b4072");
-  Add(der, "1dfe198e8b72d72468153151a8dbdbd4d262303cc29ea55e6e9e66866b0932b9");
-  Add(der, "9bdd052f198f730242012860c4db75703298213fb25488cb33883b19e62fa58c");
-  Add(der, "ed18103ff04fbbd2496a0a194e2aa6fd608e6696b3a265fb52c82d5b07d51b37");
-  Add(der, "1fe4e38751936d1011db63");
   Case(TLSECDSA.P521, 66);
 END Vectors;
 
