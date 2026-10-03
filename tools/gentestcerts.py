@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # gentestcerts.py dir: certificate chains for TLSTestChain (DER files, and PEM bundles of roots).
 # Valid from 2025 to 2035 unless said otherwise; the test takes 2026-06-01 as now.
-import sys, os, datetime
+import sys, os, datetime, ipaddress
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, ObjectIdentifier
 from cryptography.hazmat.primitives import hashes, serialization
@@ -13,9 +13,19 @@ T0 = datetime.datetime(2025, 1, 1); T1 = datetime.datetime(2035, 1, 1)
 
 def name(cn): return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
 
+def general(s):  # "ip:10.0.0.0/8", "ip:1.2.3.4", "email:x@y", "dir:O", else a DNS name
+    if s.startswith("ip:"):
+        v = s[3:]
+        return x509.IPAddress(ipaddress.ip_network(v) if "/" in v else ipaddress.ip_address(v))
+    if s.startswith("email:"): return x509.RFC822Name(s[6:])
+    if s.startswith("dir:"): return x509.DirectoryName(x509.Name([x509.NameAttribute(NameOID.ORGANIZATION_NAME, s[4:])]))
+    return x509.DNSName(s)
+
 def cert(subject, key, issuer, ikey, h, ca=None, pathlen=None, ku=None, eku=None, san=None,
-         unknown_critical=False, t0=T0, t1=T1):
-    b = (x509.CertificateBuilder().subject_name(name(subject)).issuer_name(name(issuer))
+         unknown_critical=False, t0=T0, t1=T1, permitted=None, excluded=None, org=None):
+    subj = name(subject)
+    if org: subj = x509.Name([x509.NameAttribute(NameOID.ORGANIZATION_NAME, org), x509.NameAttribute(NameOID.COMMON_NAME, subject)])
+    b = (x509.CertificateBuilder().subject_name(subj).issuer_name(name(issuer))
          .public_key(key.public_key()).serial_number(x509.random_serial_number())
          .not_valid_before(t0).not_valid_after(t1))
     if ca is not None:
@@ -27,7 +37,11 @@ def cert(subject, key, issuer, ikey, h, ca=None, pathlen=None, ku=None, eku=None
         flags.update(ku)
         b = b.add_extension(x509.KeyUsage(**flags), critical=True)
     if eku is not None: b = b.add_extension(x509.ExtendedKeyUsage(eku), critical=False)
-    if san is not None: b = b.add_extension(x509.SubjectAlternativeName([x509.DNSName(s) for s in san]), critical=False)
+    if san is not None: b = b.add_extension(x509.SubjectAlternativeName([general(s) for s in san]), critical=False)
+    if permitted is not None or excluded is not None:
+        b = b.add_extension(x509.NameConstraints(
+            permitted_subtrees=[general(s) for s in permitted] if permitted else None,
+            excluded_subtrees=[general(s) for s in excluded] if excluded else None), critical=True)
     if unknown_critical:
         b = b.add_extension(x509.UnrecognizedExtension(ObjectIdentifier("1.3.6.1.4.1.99999.1"), b"\x05\x00"), critical=True)
     return b.sign(ikey, h)
@@ -79,3 +93,23 @@ save("byleaf_leaf.der", cert("g.example.test", bad_k, "www.example.test", rsa_le
 save("tld_leaf.der", cert("tld", rsa_leaf_k, "RSA Intermediate", rsa_int_k, hashes.SHA256(),
      ku=LEAF_KU, eku=SERVER, san=["*.test"]))
 print("written to", out)
+
+# name constraints (RFC 5280 4.2.1.10) on intermediates under the RSA root
+nc_k = rsa.generate_private_key(65537, 2048)
+save("nc_int.der", cert("NC Intermediate", nc_k, "RSA Root", rsa_root_k, hashes.SHA256(), ca=True, ku=CA_KU,
+     permitted=["example.test", "ip:10.0.0.0/8"], excluded=["bad.example.test"]))
+def ncleaf(f, issuer, ik, san, org=None):
+    save(f, cert("h.example.test", rsa_leaf_k, issuer, ik, hashes.SHA256(), ku=LEAF_KU, eku=SERVER, san=san, org=org))
+ncleaf("nc_ok_leaf.der", "NC Intermediate", nc_k, ["www.example.test", "ip:10.1.2.3"])
+ncleaf("nc_out_leaf.der", "NC Intermediate", nc_k, ["www.example.test", "www.other.test"])
+ncleaf("nc_excl_leaf.der", "NC Intermediate", nc_k, ["x.bad.example.test"])
+ncleaf("nc_ip_leaf.der", "NC Intermediate", nc_k, ["www.example.test", "ip:192.168.1.1"])
+ncleaf("nc_wild_leaf.der", "NC Intermediate", nc_k, ["*.example.test"])
+save("ncdir_int.der", cert("NC Dir Intermediate", nc_k, "RSA Root", rsa_root_k, hashes.SHA256(), ca=True, ku=CA_KU,
+     permitted=["dir:Good"]))
+ncleaf("ncdir_ok_leaf.der", "NC Dir Intermediate", nc_k, ["h.example.test"], org="Good")
+ncleaf("ncdir_bad_leaf.der", "NC Dir Intermediate", nc_k, ["h.example.test"], org="Bad")
+save("ncmail_int.der", cert("NC Mail Intermediate", nc_k, "RSA Root", rsa_root_k, hashes.SHA256(), ca=True, ku=CA_KU,
+     permitted=["email:example.test"]))
+ncleaf("ncmail_ok_leaf.der", "NC Mail Intermediate", nc_k, ["h.example.test"])
+ncleaf("ncmail_bad_leaf.der", "NC Mail Intermediate", nc_k, ["h.example.test", "email:a@example.test"])

@@ -93,10 +93,12 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Names.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Ext.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSSig.Mod
+	cd $(BUILD) && $(VOC) -s ../src/TLSNameConstraints.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSX509Chain.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLSCABundle.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestChain.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestX509Names.Mod
+	cd $(BUILD) && $(VOC) -m ../src/TLSTestIP.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13EncHandshake.Mod
 	cd $(BUILD) && $(VOC) -m ../src/TLSTestEncHandshake.Mod
 	cd $(BUILD) && $(VOC) -s ../src/TLS13ClientFinished.Mod

@@ -3,8 +3,9 @@
 #   SSL_CERT_FILE=dir/ca.pem ./tlsConnect localhost 18443
 # 18443 RSA and 18444 ECDSA connect; 18445 wrong host, 18446 untrusted CA, 18447 expired,
 # 18448 self-signed and 18449 TLS 1.2 only are refused; 18450 cut (no close_notify), 18451 closed
-# properly, 18452 shorter than its Content-Length, 18453 1 MB (dir/big.ref)
-import ssl, socket, threading, datetime, sys, os, time
+# properly, 18452 shorter than its Content-Length, 18453 1 MB (dir/big.ref); 18454 (127.0.0.1) and
+# 18455 ([::1]) have only IP addresses as names
+import ssl, socket, threading, datetime, sys, os, time, ipaddress
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives import hashes, serialization
@@ -17,7 +18,8 @@ def mk(subject, key, issuer, ikey, ca, san=None, t0=None, t1=None):
          .serial_number(x509.random_serial_number()).not_valid_before(t0 or now - datetime.timedelta(days=1))
          .not_valid_after(t1 or now + datetime.timedelta(days=30))
          .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
-    if san: b = b.add_extension(x509.SubjectAlternativeName([x509.DNSName(s) for s in san]), critical=False)
+    if san: b = b.add_extension(x509.SubjectAlternativeName(
+        [x509.IPAddress(ipaddress.ip_address(s[3:])) if s.startswith("ip:") else x509.DNSName(s) for s in san]), critical=False)
     if not ca: b = b.add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
     return b.sign(ikey, hashes.SHA256())
 def pem(c): return c.public_bytes(serialization.Encoding.PEM)
@@ -38,6 +40,9 @@ cases = {  # port: (certificate chain, key, TLS 1.2 only)
 good = cases[18444]
 MODE = {18450: 'cut', 18451: 'closed', 18452: 'short', 18453: 'big'}  # answers other than "ok"
 for p in MODE: cases[p] = good
+ipcert = ([mk("ip", ek, "Test CA", ca_k, False, ["ip:127.0.0.1", "ip:::1"])], ek, False)
+cases[18454] = ipcert    # https://127.0.0.1:18454/ (the names are only IP addresses)
+cases[18455] = ipcert    # https://[::1]:18455/, on ::1
 BIG = bytes((i * 7 + i // 251) % 256 for i in range(1 << 20))
 open(os.path.join(D, "big.ref"), "wb").write(BIG)
 def answer(port, t):
@@ -60,7 +65,9 @@ def serve(port, chain, key, tls12):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(cf, kf)
     if tls12: ctx.minimum_version = ctx.maximum_version = ssl.TLSVersion.TLSv1_2
     else: ctx.minimum_version = ssl.TLSVersion.TLSv1_3
-    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", port)); s.listen(5); s.settimeout(1)
+    if port == 18455: s = socket.socket(socket.AF_INET6); addr = ("::1", port)
+    else: s = socket.socket(); addr = ("127.0.0.1", port)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(addr); s.listen(5); s.settimeout(1)
     end = time.time() + float(sys.argv[1])
     while time.time() < end:
         try: c, _ = s.accept()
