@@ -5,7 +5,7 @@ import sys, os, datetime, ipaddress
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, ObjectIdentifier
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
 
 out = sys.argv[1]
 os.makedirs(out, exist_ok=True)
@@ -22,7 +22,7 @@ def general(s):  # "ip:10.0.0.0/8", "ip:1.2.3.4", "email:x@y", "dir:O", else a D
     return x509.DNSName(s)
 
 def cert(subject, key, issuer, ikey, h, ca=None, pathlen=None, ku=None, eku=None, san=None,
-         unknown_critical=False, t0=T0, t1=T1, permitted=None, excluded=None, org=None):
+         unknown_critical=False, t0=T0, t1=T1, permitted=None, excluded=None, org=None, pss_salt=None):
     subj = name(subject)
     if org: subj = x509.Name([x509.NameAttribute(NameOID.ORGANIZATION_NAME, org), x509.NameAttribute(NameOID.COMMON_NAME, subject)])
     b = (x509.CertificateBuilder().subject_name(subj).issuer_name(name(issuer))
@@ -44,6 +44,8 @@ def cert(subject, key, issuer, ikey, h, ca=None, pathlen=None, ku=None, eku=None
             excluded_subtrees=[general(s) for s in excluded] if excluded else None), critical=True)
     if unknown_critical:
         b = b.add_extension(x509.UnrecognizedExtension(ObjectIdentifier("1.3.6.1.4.1.99999.1"), b"\x05\x00"), critical=True)
+    if pss_salt is not None:  # RSASSA-PSS, MGF1 with the same hash
+        return b.sign(ikey, h, rsa_padding=padding.PSS(mgf=padding.MGF1(h), salt_length=pss_salt))
     return b.sign(ikey, h)
 
 def save(fname, c): open(os.path.join(out, fname), 'wb').write(c.public_bytes(serialization.Encoding.DER))
@@ -113,3 +115,16 @@ save("ncmail_int.der", cert("NC Mail Intermediate", nc_k, "RSA Root", rsa_root_k
      permitted=["email:example.test"]))
 ncleaf("ncmail_ok_leaf.der", "NC Mail Intermediate", nc_k, ["h.example.test"])
 ncleaf("ncmail_bad_leaf.der", "NC Mail Intermediate", nc_k, ["h.example.test", "email:a@example.test"])
+
+# RSASSA-PSS signatures (RFC 4055): an intermediate signed by the RSA root, leaves signed by it
+pss_k = rsa.generate_private_key(65537, 2048)
+save("pss_int.der", cert("PSS Intermediate", pss_k, "RSA Root", rsa_root_k, hashes.SHA256(), ca=True, ku=CA_KU, pss_salt=32))
+save("pss_leaf.der", cert("pss.example.test", rsa_leaf_k, "PSS Intermediate", pss_k, hashes.SHA384(),
+     ku=LEAF_KU, eku=SERVER, san=["pss.example.test"], pss_salt=48))
+save("pss_salt_leaf.der", cert("pss.example.test", rsa_leaf_k, "PSS Intermediate", pss_k, hashes.SHA256(),
+     ku=LEAF_KU, eku=SERVER, san=["pss.example.test"], pss_salt=20))
+# P-521: an intermediate under the P-384 root, a leaf signed with SHA-512
+p521_k = ec.generate_private_key(ec.SECP521R1())
+save("p521_int.der", cert("P-521 Intermediate", p521_k, "EC Root", ec_root_k, hashes.SHA384(), ca=True, ku=CA_KU))
+save("p521_leaf.der", cert("p521.example.test", ec_leaf_k, "P-521 Intermediate", p521_k, hashes.SHA512(),
+     ku=dict(digital_signature=True), eku=SERVER, san=["p521.example.test"]))

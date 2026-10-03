@@ -4,16 +4,17 @@
 # 18443 RSA and 18444 ECDSA connect; 18445 wrong host, 18446 untrusted CA, 18447 expired,
 # 18448 self-signed and 18449 TLS 1.2 only are refused; 18450 cut (no close_notify), 18451 closed
 # properly, 18452 shorter than its Content-Length, 18453 1 MB (dir/big.ref); 18454 (127.0.0.1) and
-# 18455 ([::1]) have only IP addresses as names
+# 18455 ([::1]) have only IP addresses as names; 18456 a P-521 key, 18457 an RSASSA-PSS signed
+# certificate (under a second, RSA, root in ca.pem)
 import ssl, socket, threading, datetime, sys, os, time, ipaddress
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
 D = sys.argv[2]
 now = datetime.datetime.now(datetime.timezone.utc)
 def name(cn): return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
-def mk(subject, key, issuer, ikey, ca, san=None, t0=None, t1=None):
+def mk(subject, key, issuer, ikey, ca, san=None, t0=None, t1=None, pss=False):
     b = (x509.CertificateBuilder().subject_name(name(subject)).issuer_name(name(issuer)).public_key(key.public_key())
          .serial_number(x509.random_serial_number()).not_valid_before(t0 or now - datetime.timedelta(days=1))
          .not_valid_after(t1 or now + datetime.timedelta(days=30))
@@ -21,12 +22,14 @@ def mk(subject, key, issuer, ikey, ca, san=None, t0=None, t1=None):
     if san: b = b.add_extension(x509.SubjectAlternativeName(
         [x509.IPAddress(ipaddress.ip_address(s[3:])) if s.startswith("ip:") else x509.DNSName(s) for s in san]), critical=False)
     if not ca: b = b.add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+    if pss: return b.sign(ikey, hashes.SHA256(), rsa_padding=padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32))
     return b.sign(ikey, hashes.SHA256())
 def pem(c): return c.public_bytes(serialization.Encoding.PEM)
 def keypem(k): return k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
 ca_k = ec.generate_private_key(ec.SECP256R1()); ca = mk("Test CA", ca_k, "Test CA", ca_k, True)
 other_k = ec.generate_private_key(ec.SECP256R1()); other = mk("Other CA", other_k, "Other CA", other_k, True)
-open(os.path.join(D, "ca.pem"), "wb").write(pem(ca))
+rsaca_k = rsa.generate_private_key(65537, 2048); rsaca = mk("Test RSA CA", rsaca_k, "Test RSA CA", rsaca_k, True)
+open(os.path.join(D, "ca.pem"), "wb").write(pem(ca) + pem(rsaca))
 rk = rsa.generate_private_key(65537, 2048); ek = ec.generate_private_key(ec.SECP256R1())
 cases = {  # port: (certificate chain, key, TLS 1.2 only)
  18443: ([mk("localhost", rk, "Test CA", ca_k, False, ["localhost"])], rk, False),                 # RSA: valid
@@ -43,6 +46,9 @@ for p in MODE: cases[p] = good
 ipcert = ([mk("ip", ek, "Test CA", ca_k, False, ["ip:127.0.0.1", "ip:::1"])], ek, False)
 cases[18454] = ipcert    # https://127.0.0.1:18454/ (the names are only IP addresses)
 cases[18455] = ipcert    # https://[::1]:18455/, on ::1
+p521k = ec.generate_private_key(ec.SECP521R1())
+cases[18456] = ([mk("localhost", p521k, "Test CA", ca_k, False, ["localhost"])], p521k, False)  # CertificateVerify 0603
+cases[18457] = ([mk("localhost", rk, "Test RSA CA", rsaca_k, False, ["localhost"], pss=True)], rk, False)  # an RSASSA-PSS certificate
 BIG = bytes((i * 7 + i // 251) % 256 for i in range(1 << 20))
 open(os.path.join(D, "big.ref"), "wb").write(BIG)
 def answer(port, t):
