@@ -5,7 +5,7 @@
 # 18448 self-signed and 18449 TLS 1.2 only are refused; 18450 cut (no close_notify), 18451 closed
 # properly, 18452 shorter than its Content-Length, 18453 1 MB (dir/big.ref); 18454 (127.0.0.1) and
 # 18455 ([::1]) have only IP addresses as names; 18456 a P-521 key, 18457 an RSASSA-PSS signed
-# certificate (under a second, RSA, root in ca.pem)
+# certificate (under a second, RSA, root in ca.pem); 18458 asks for an optional client certificate
 import ssl, socket, threading, datetime, sys, os, time, ipaddress
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
@@ -49,6 +49,7 @@ cases[18455] = ipcert    # https://[::1]:18455/, on ::1
 p521k = ec.generate_private_key(ec.SECP521R1())
 cases[18456] = ([mk("localhost", p521k, "Test CA", ca_k, False, ["localhost"])], p521k, False)  # CertificateVerify 0603
 cases[18457] = ([mk("localhost", rk, "Test RSA CA", rsaca_k, False, ["localhost"], pss=True)], rk, False)  # an RSASSA-PSS certificate
+cases[18458] = good  # asks for a client certificate (CertificateRequest), optional
 BIG = bytes((i * 7 + i // 251) % 256 for i in range(1 << 20))
 open(os.path.join(D, "big.ref"), "wb").write(BIG)
 def answer(port, t):
@@ -69,6 +70,7 @@ def serve(port, chain, key, tls12):
     cf = os.path.join(D, "c%d.pem" % port); kf = os.path.join(D, "k%d.pem" % port)
     open(cf, "wb").write(b"".join(pem(c) for c in chain)); open(kf, "wb").write(keypem(key))
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(cf, kf)
+    if port == 18458: ctx.verify_mode = ssl.CERT_OPTIONAL; ctx.load_verify_locations(os.path.join(D, "ca.pem"))
     if tls12: ctx.minimum_version = ctx.maximum_version = ssl.TLSVersion.TLSv1_2
     else: ctx.minimum_version = ssl.TLSVersion.TLSv1_3
     if port == 18455: s = socket.socket(socket.AF_INET6); addr = ("::1", port)
