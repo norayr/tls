@@ -1,5 +1,5 @@
 MODULE TLSCABundle;
-IMPORT SYSTEM, Linux0, Kernel, TLSBytes;  (* Linux0: polpo's, or the one of the voc Internet module *)
+IMPORT SYSTEM, Linux0 := unixNet, Kernel, TLSBytes;  (* Linux0: polpo's, or the one of the voc Internet module *)
 
 CONST
   MaxBundle* = 1048576;
