@@ -15,7 +15,7 @@ DPD  =  deps
 ifndef DPS
 DPS := $(mkfile_dir_path)/$(DPD)
 endif
-TESTS = TLSTestBytes TLSTestSHA256 TLSTestHKDF TLSTestSHA512 TLSTestNum TLSTestNumBig TLSTestECDSA256 TLSTestECDSA384 TLSTestECDSA521 TLSTestSign TLSTestECDH TLSTestX25519 TLSTestCrypto TLSTestAESGCM TLSTestGCM TLSTestRecords TLSTestHandshake TLSTestHRR TLSTestKeys TLSTestFinished TLSTestPEM TLSTestTLS13Certs TLSTestASN1 TLSTestX509 TLSTestRSA1 TLSTestRSA2 TLSTestRSA3 TLSTestChain TLSTestX509Names TLSTestIP TLSTestEncHandshake TLSTestClientFin TLSTestApplication TLSTestServer
+TESTS = TLSTestBytes TLSTestSHA256 TLSTestHKDF TLSTestSHA512 TLSTestNum TLSTestNumBig TLSTestECDSA256 TLSTestECDSA384 TLSTestECDSA521 TLSTestSign TLSTestECDH TLSTestX25519 TLSTestCrypto TLSTestAESGCM TLSTestGCM TLSTestRecords TLSTestHandshake TLSTestHRR TLSTestKeys TLSTestFinished TLSTestPEM TLSTestTLS13Certs TLSTestASN1 TLSTestX509 TLSTestRSA1 TLSTestRSA2 TLSTestRSA3 TLSTestChain TLSTestX509Names TLSTestIP TLSTestEncHandshake TLSTestClientFin TLSTestApplication TLSTestServer TLSTestIdentity TLSTestCertGen
 
 all: get_deps build_deps buildThis
 
@@ -110,6 +110,11 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestApplication.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Random.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSNow.Mod
+	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSIdentity.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestIdentity.Mod
+	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSCertGen.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestCertGen.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/certGen.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Live.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Server.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestServer.Mod
@@ -118,6 +123,7 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/tlsConnect.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/httpsGet.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/tlsServe.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/tlsIdent.Mod
 tests:
 	@cd $(BUILD) && fails=0; for t in $(TESTS); do \
 		out=$$(TLS_TEST_CERTS=$(mkfile_dir_path)/test/certs ./$$t 2>&1); \
