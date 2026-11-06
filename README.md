@@ -1,8 +1,8 @@
 # tls
 
 TLS 1.3 (RFC 8446) written in Oberon, for the [voc](https://github.com/vishaps/voc) compiler and
-for [polpo](https://github.com/polpo-system/polpo), which uses the same files (only their import
-lines differ). It uses only 32 bit integers, so it runs wherever these compilers do, and the
+for [polpo](https://github.com/polpo-system/polpo), which uses the same files with adapted
+platform imports. It uses only 32 bit integers, so it runs wherever these compilers do, and the
 cryptography is its own: no OpenSSL.
 
 ## What it does
@@ -99,6 +99,11 @@ make          # the dependencies (strutils, base64, Internet, http) are fetched 
 make tests    # the unit tests, against the files in test/certs
 ```
 
+The hexadecimal test dumps use `Out.HexDigits(value, width)`. Use a VOC
+installation providing that procedure; `Out.Hex` has ETH Oberon's one-argument
+interface. The five hexadecimal-dump tests match Polpo's versions at
+`c9795fc1`, printing two uppercase digits per byte.
+
 After the import of a module changes, run `make clean` first: voc keeps the import list of an old
 symbol file when the interface stays the same, and the link then misses the new module.
 
@@ -108,6 +113,7 @@ The tests in `tools/` start real servers to test against (`testservers.py`, `key
 ## In polpo
 
 polpo keeps a copy in `src/lib/tls`, copied with `loksh vocsync.From tls/src/X.Mod ... src/lib/tls`,
-which changes the import lines (`Out := out`, `Linux0` for `Linux0 := unixNet`). Its tests are in
+which adapts platform imports (`Linux0` for `Linux0 := unixNet`). Both systems import `Out`
+directly. Its tests are in
 `src/lib/tls/test` (`TLS_TEST_CERTS=src/lib/tls/test/certs loksh TLSTestChain.Run` and so on). The
 Gemini clients (dcs, DCS, Pishmish) and servers (agena, cobweb) of polpo are built on it.
