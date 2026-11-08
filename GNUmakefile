@@ -134,5 +134,9 @@ tests:
 	done; \
 	echo "$$fails test programs failed"; test $$fails = 0
 
+.PHONY: async-tests
+async-tests:
+	python3 test/async.py "$(mkfile_dir_path)/src/TLS13Live.Mod" "$(VOC)"
+
 clean:
 	if [ -d "$(BUILD)" ]; then rm -rf $(BLD); fi

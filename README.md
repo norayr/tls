@@ -55,6 +55,42 @@ With a client certificate: `TLSIdentity.Load(cert, key, id)`, then `TLS13Live.Se
 before connecting. After a connection, `TLS13Live.certPin` is the SHA-256 of the server's
 certificate and `TLS13Live.keyPin` that of its key.
 
+### Resumable client I/O
+
+On VOC's Linux model-2 profile, `Begin(host, fd, state)` takes ownership of an
+already connected descriptor and makes it nonblocking. Repeated
+`PollHandshake(state)` calls return `0` while pending, `1` after verification
+and Finished, or `-1` on failure. The caller supplies the overall deadline
+and calls `CloseNow` on cancellation. The asynchronous path uses the same
+chain, hostname, CertificateVerify and Finished checks as the blocking path.
+
+After verification, `ReadSome(state, bytes, offset, count)` and `WriteSome`
+return a positive byte count, `-2` when pending, or `-1` on failure.
+`ReadSome` returns zero for close_notify. Retain the same unacknowledged
+write span when retrying after `-2`; a positive result acknowledges plaintext
+only after its complete encrypted record has been flushed. Writes accept
+at most 16384 plaintext bytes at a time. Partial record headers, bodies and
+writes are retained across calls. Post-handshake KeyUpdate responses are
+queued in order with application records. `FlushOutput` advances pending
+output and returns `0`, `1` or `-1` using the handshake status convention.
+
+`UseNonblocking` switches an established blocking client or server session
+to the resumable record API. Use `ReadSome`/`WriteSome` thereafter; the
+blocking record entry points reject nonblocking states. `CloseNow` closes
+immediately and clears keys, including a pending handshake. It aborts rather
+than waiting to send close_notify; `Disconnect` has the same prompt behavior
+for nonblocking states. Rebuild modules embedding `TLS13Live.State` when
+updating this interface.
+
+The API is single-threaded. The current certificate-handshake parser has
+shared state, so resumable handshakes are serialized; established sessions
+can progress independently. Do not change identity/pinning settings during
+an active handshake. Blocking client handshakes are refused while a
+resumable handshake owns that parser. Certificate verification and CA-file
+loading remain synchronous computation and file I/O. These entry points
+require VOC's `Sockets` descriptor APIs; this profile has been tested on
+Linux, with other platform bindings requiring separate validation.
+
 A server, on a connection the caller accepted (with a timeout set on it):
 
 ```oberon
@@ -97,7 +133,14 @@ with a client certificate), and `certGen name [mail] [dns]` (print a new certifi
 ```sh
 make          # the dependencies (strutils, base64, Internet, http) are fetched into deps/
 make tests    # the unit tests, against the files in test/certs
+make async-tests # fragmented live TLS, resumable records and the blocking API
 ```
+
+`async-tests` uses the installed VOC dependencies, Python 3 and OpenSSL's
+command-line tool for temporary test certificates. It exercises split TLS
+headers and bodies, KeyUpdate/new keys, close_notify, HelloRetryRequest,
+verified connections and hostname/CA rejection. It compiles the current
+`TLS13Live` source into an isolated temporary build.
 
 The hexadecimal test dumps use `Out.HexDigits(value, width)`. Use a VOC
 installation providing that procedure; `Out.Hex` has ETH Oberon's one-argument
