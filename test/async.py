@@ -75,7 +75,9 @@ def main():
             subprocess.run([compiler, "-s", str(source)], cwd=path, check=True)
         records = Path(__file__).with_name("TestAsyncRecords.Mod").resolve()
         subprocess.run([compiler, *flags, str(records)], cwd=path, check=True)
-        subprocess.run([str(path / "TestAsyncRecords")], cwd=path, check=True, timeout=15)
+        runtime_env = {**os.environ}
+        runtime_env["VOC_MODULE_PATH"] = os.pathsep.join(filter(None, (str(path), runtime_env.get("VOC_MODULE_PATH"))))
+        subprocess.run([str(path / "TestAsyncRecords")], cwd=path, env=runtime_env, check=True, timeout=15)
         subprocess.run([compiler, *flags, str(probe_source)], cwd=path, check=True)
         cert, key = certificate(path, "server", "localhost")
         wrong, _ = certificate(path, "other", "localhost")
@@ -96,7 +98,7 @@ def main():
                 worker = threading.Thread(target=serve, args=(server, context, failures, mode == "reject"), daemon=True)
                 worker.start()
                 result = subprocess.run([str(path / "TestAsync"), host, str(server.getsockname()[1]), mode],
-                                        env={**os.environ, "SSL_CERT_FILE": str(trust)},
+                                        env={**runtime_env, "SSL_CERT_FILE": str(trust)},
                                         capture_output=True, text=True, timeout=40)
                 worker.join(3)
                 assert not worker.is_alive(), "server did not finish"
