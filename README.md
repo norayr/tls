@@ -36,7 +36,7 @@ cryptography is its own: no OpenSSL.
   openssl is not needed to make them.
 - **Ed25519** (`TLSEd25519`, `TLSEd25519Keys`): pure RFC 8032 key derivation,
   generation, signing and strict verification, with incremental SHA-512 for
-  messages larger than `TLSBytes.Buffer`.
+  messages larger than `TLSBytes.Buffer`. See [the API and verification policy](Ed25519.md).
 
 The arithmetic is not constant time: the code suits experimental servers and clients rather than
 places where an attacker can measure many handshakes.
@@ -145,6 +145,11 @@ command-line tool for temporary test certificates. It exercises split TLS
 headers and bodies, KeyUpdate/new keys, close_notify, HelloRetryRequest,
 verified connections and hostname/CA rejection. It compiles the current
 `TLS13Live` source into an isolated temporary build.
+
+The optional [Ed25519 interoperability driver](test/ed25519.py) uses Python
+`cryptography` and `hashlib` to compare signatures and hashes independently,
+including million-byte messages, malformed encodings and entropy-read failures.
+See [Ed25519 signatures](Ed25519.md) for the command and security limitations.
 
 The hexadecimal test dumps use `Out.HexDigits(value, width)`. Use a VOC
 installation providing that procedure; `Out.Hex` has ETH Oberon's one-argument
