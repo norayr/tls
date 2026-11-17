@@ -17,6 +17,8 @@ DPS := $(mkfile_dir_path)/$(DPD)
 endif
 TESTS = TLSTestBytes TLSTestSHA256 TLSTestHKDF TLSTestSHA512 TLSTestNum TLSTestNumBig TLSTestECDSA256 TLSTestECDSA384 TLSTestECDSA521 TLSTestSign TLSTestECDH TLSTestX25519 TLSTestCrypto TLSTestAESGCM TLSTestGCM TLSTestRecords TLSTestHandshake TLSTestHRR TLSTestKeys TLSTestFinished TLSTestPEM TLSTestTLS13Certs TLSTestASN1 TLSTestX509 TLSTestRSA1 TLSTestRSA2 TLSTestRSA3 TLSTestChain TLSTestX509Names TLSTestIP TLSTestEncHandshake TLSTestClientFin TLSTestApplication TLSTestServer TLSTestIdentity TLSTestCertGen
 
+TESTS += TLSTestSHA512Stream
+
 all: get_deps build_deps buildThis
 
 get_deps:
@@ -55,6 +57,7 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestHKDF.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSSHA512.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestSHA512.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestSHA512Stream.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSNum.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestNum.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestNumBig.Mod
