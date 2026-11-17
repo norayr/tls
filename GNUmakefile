@@ -18,6 +18,7 @@ endif
 TESTS = TLSTestBytes TLSTestSHA256 TLSTestHKDF TLSTestSHA512 TLSTestNum TLSTestNumBig TLSTestECDSA256 TLSTestECDSA384 TLSTestECDSA521 TLSTestSign TLSTestECDH TLSTestX25519 TLSTestCrypto TLSTestAESGCM TLSTestGCM TLSTestRecords TLSTestHandshake TLSTestHRR TLSTestKeys TLSTestFinished TLSTestPEM TLSTestTLS13Certs TLSTestASN1 TLSTestX509 TLSTestRSA1 TLSTestRSA2 TLSTestRSA3 TLSTestChain TLSTestX509Names TLSTestIP TLSTestEncHandshake TLSTestClientFin TLSTestApplication TLSTestServer TLSTestIdentity TLSTestCertGen
 
 TESTS += TLSTestSHA512Stream
+TESTS += TLSTestEd25519
 
 all: get_deps build_deps buildThis
 
@@ -56,6 +57,7 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestSHA256.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestHKDF.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSSHA512.Mod
+	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSEd25519.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestSHA512.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestSHA512Stream.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSNum.Mod
@@ -112,6 +114,8 @@ buildThis:
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Application.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestApplication.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Random.Mod
+	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSEd25519Keys.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestEd25519.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSNow.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSIdentity.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestIdentity.Mod

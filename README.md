@@ -34,6 +34,9 @@ cryptography is its own: no OpenSSL.
 - **New certificates** (`TLSCertGen`): self-signed X.509 v3 with a new P-256 key, for an identity
   (name and mail) or a server (with its host name), written as PEM, with the key as PKCS #8. So
   openssl is not needed to make them.
+- **Ed25519** (`TLSEd25519`, `TLSEd25519Keys`): pure RFC 8032 key derivation,
+  generation, signing and strict verification, with incremental SHA-512 for
+  messages larger than `TLSBytes.Buffer`.
 
 The arithmetic is not constant time: the code suits experimental servers and clients rather than
 places where an attacker can measure many handshakes.
@@ -117,6 +120,7 @@ keyPEM)`; pass `""` for the mail or the host name you don't want.
 | `TLSBytes`, `BIT`, `TLSNum` | byte buffers, 32 bit words, big numbers (Montgomery) |
 | `TLSSHA256`, `TLSSHA512`, `TLSHKDF` | hashes, HMAC, HKDF |
 | `TLSAESGCM`, `TLSX25519`, `TLSECDSA`, `TLSRSA` | AES-128-GCM, X25519, ECDSA and ECDH (P-256/384/521), RSA |
+| `TLSEd25519`, `TLSEd25519Keys` | Ed25519 signatures and entropy-backed seed generation |
 | `TLSASN1`, `TLSBase64`, `TLSPEM` | DER, Base64, PEM (read and write) |
 | `TLSX509`, `TLSX509Ext`, `TLSX509Names`, `TLSX509Validity`, `TLSNameConstraints`, `TLSX509Chain`, `TLSSig`, `TLSCABundle`, `TLSNow` | certificates and their chains |
 | `TLS13Handshake`, `TLS13Keys`, `TLS13Records`, `TLS13EncHandshake`, `TLS13Certs`, `TLS13Finished`, `TLS13ClientFinished`, `TLS13Application`, `TLS13Random` | the protocol |
