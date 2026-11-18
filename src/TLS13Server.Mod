@@ -1,11 +1,12 @@
 MODULE TLS13Server;
 (** The server side of TLS 1.3 (RFC 8446), for Gemini and HTTPS servers. The server has a
-  certificate chain with an ECDSA P-256 key (Load); Accept makes the handshake on a connection
+  certificate chain and a private key (Load); Accept makes the handshake on a connection
   that the caller accepted, and gives a TLS13Live.State, which is then read and written as a
   client connection is (ReadAppMax, WriteAppString, Disconnect).
   One cipher suite, TLS_AES_128_GCM_SHA256; the key exchange X25519 or P-256, with a
   HelloRetryRequest when the client offered a key share of neither; a certificate with an ECDSA
-  P-256 key (CertificateVerify ecdsa_secp256r1_sha256) or an RSA key (rsa_pss_rsae_sha256), see
+  P-256 key (CertificateVerify ecdsa_secp256r1_sha256), an RSA key (rsa_pss_rsae_sha256), or
+  an Ed25519 key (ed25519), see
   TLSIdentity. No PSK, so no session tickets and no early data; no client
   certificates. Several servers on one port (virtual hosts): AcceptBy, with a procedure that
   gives the certificate for the host name the client asks for (SNI). A client that does not wait (a missing ClientHello) blocks Accept: the caller
@@ -21,7 +22,7 @@ CONST
   CertificateVerify = 15; Finished = 20; MessageHash = 254;
   ExtServerName = 0; ExtSupportedGroups = 10; ExtSignatureAlgorithms = 13;
   ExtSupportedVersions = 43; ExtKeyShare = 51;
-  X25519 = 1DH; P256 = 17H; EcdsaP256Sha256 = 403H; RsaPssRsaeSha256 = 804H; AES128GCM = 1301H;
+  X25519 = 1DH; P256 = 17H; EcdsaP256Sha256 = 403H; RsaPssRsaeSha256 = 804H; Ed25519 = 807H; AES128GCM = 1301H;
   (* alerts *)
   UnexpectedMessage = 10; BadRecordMac = 20; RecordOverflow = 22; HandshakeFailure = 40; IllegalParameter = 47;
   DecodeError = 50; DecryptError = 51; ProtocolVersion = 70; InternalError = 80;
@@ -38,7 +39,7 @@ TYPE
     sidLen, shareLen, group: LONGINT;          (* group: of the key share taken, 0: none *)
     sid: ARRAY 32 OF CHAR;
     share: ARRAY 65 OF CHAR;
-    tls13, aes, nullComp, ecdsa, rsapss, x25519, p256: BOOLEAN;
+    tls13, aes, nullComp, ecdsa, rsapss, ed25519, x25519, p256: BOOLEAN;
     host: ARRAY 256 OF CHAR
   END;
 
@@ -173,6 +174,7 @@ VAR p, end, n, type, len, e, k, g, l, i: LONGINT; seen: SET;
 BEGIN
   h.sidLen := 0; h.shareLen := 0; h.group := 0; h.host := "";
   h.tls13 := FALSE; h.aes := FALSE; h.nullComp := FALSE; h.ecdsa := FALSE; h.rsapss := FALSE; h.x25519 := FALSE; h.p256 := FALSE;
+  h.ed25519 := FALSE;
   IF (m.len < 4 + 35) OR (ORD(m.data[0]) # ClientHello) THEN RETURN FALSE END;
   end := m.len; p := 4 + 2 + 32;                  (* legacy_version, random *)
   n := ORD(m.data[p]); INC(p);                    (* legacy_session_id *)
@@ -210,7 +212,9 @@ BEGIN
       h.tls13 := Has16(m, p + 1, e, 304H)
     ELSIF (type = ExtSupportedGroups) OR (type = ExtSignatureAlgorithms) THEN
       IF (len < 2) OR (2 + TLSBytes.GetBE16(m, p) # len) THEN RETURN FALSE END;
-      IF type = ExtSignatureAlgorithms THEN h.ecdsa := Has16(m, p + 2, e, EcdsaP256Sha256); h.rsapss := Has16(m, p + 2, e, RsaPssRsaeSha256)
+      IF type = ExtSignatureAlgorithms THEN
+        h.ecdsa := Has16(m, p + 2, e, EcdsaP256Sha256); h.rsapss := Has16(m, p + 2, e, RsaPssRsaeSha256);
+        h.ed25519 := Has16(m, p + 2, e, Ed25519)
       ELSE h.x25519 := Has16(m, p + 2, e, X25519); h.p256 := Has16(m, p + 2, e, P256)
       END
     ELSIF type = ExtKeyShare THEN
@@ -273,7 +277,7 @@ BEGIN
   IF ~h.tls13 THEN Fail(ProtocolVersion, "the client does not offer TLS 1.3")
   ELSIF ~h.aes THEN Fail(HandshakeFailure, "the client does not offer TLS_AES_128_GCM_SHA256")
   ELSIF ~h.nullComp THEN Fail(IllegalParameter, "no null compression in the ClientHello")
-  ELSIF ~h.ecdsa & ~h.rsapss THEN Fail(HandshakeFailure, "the client accepts neither ecdsa_secp256r1_sha256 nor rsa_pss_rsae_sha256")
+  ELSIF ~h.ecdsa & ~h.rsapss & ~h.ed25519 THEN Fail(HandshakeFailure, "the client accepts no supported signature scheme")
   ELSIF (h.group = 0) & ~(first & (h.x25519 OR h.p256)) THEN Fail(HandshakeFailure, "no key exchange in common (X25519, P-256)")
   ELSE RETURN TRUE
   END;
@@ -393,7 +397,9 @@ BEGIN
   IF ~CheckHello(h, TRUE) THEN RETURN FALSE END;
   id := choose(serverName);
   IF id = NIL THEN Fail(UnrecognizedName, "no certificate for the host name the client asks for"); RETURN FALSE END;
-  IF (TLSIdentity.Scheme(id) = EcdsaP256Sha256) & ~h.ecdsa OR (TLSIdentity.Scheme(id) = RsaPssRsaeSha256) & ~h.rsapss THEN
+  IF (TLSIdentity.Scheme(id) = EcdsaP256Sha256) & ~h.ecdsa OR
+     (TLSIdentity.Scheme(id) = RsaPssRsaeSha256) & ~h.rsapss OR
+     (TLSIdentity.Scheme(id) = Ed25519) & ~h.ed25519 THEN
     Fail(HandshakeFailure, "the client does not accept the signatures of the certificate"); RETURN FALSE
   END;
   TLSBytes.Copy(msg, th);
