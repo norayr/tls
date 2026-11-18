@@ -37,6 +37,9 @@ cryptography is its own: no OpenSSL.
 - **Ed25519** (`TLSEd25519`, `TLSEd25519Keys`): pure RFC 8032 key derivation,
   generation, signing and strict verification, with incremental SHA-512 for
   messages larger than `TLSBytes.Buffer`. See [the API and verification policy](Ed25519.md).
+- **Pinned mutual authentication:** resumable client and server handshakes can
+  require an exact Ed25519 public-key pin and an initial client certificate.
+  `TLSCertGen.Ed25519SelfSigned` creates certificates from existing identity seeds.
 
 The arithmetic is not constant time: the code suits experimental servers and clients rather than
 places where an attacker can measure many handshakes.
@@ -85,6 +88,10 @@ than waiting to send close_notify; `Disconnect` has the same prompt behavior
 for nonblocking states. Rebuild modules embedding `TLS13Live.State` when
 updating this interface.
 
+`WantsWrite(state)` reports queued encrypted output for writable event watches.
+`PendingPlaintext(state)` reports buffered application bytes which can be drained
+without waiting for another readable descriptor event.
+
 The API is single-threaded. The current certificate-handshake parser has
 shared state, so resumable handshakes are serialized; established sessions
 can progress independently. Do not change identity/pinning settings during
@@ -93,6 +100,37 @@ resumable handshake owns that parser. Certificate verification and CA-file
 loading remain synchronous computation and file I/O. These entry points
 require VOC's `Sockets` descriptor APIs; this profile has been tested on
 Linux, with other platform bindings requiring separate validation.
+
+### Manually pinned Ed25519 peers
+
+Create a self-signed certificate from the persistent identity seed using
+`TLSCertGen.Ed25519SelfSigned`, then load it with `TLSIdentity.FromEd25519`.
+The peer pin is a `TLSBytes.Buffer` containing exactly 32 raw public-key bytes.
+The caller supplies the pin from an independently authenticated source.
+
+For a client, `TLS13Live.BeginEd25519(host, fd, identity, pin, state)` starts the
+handshake on a connected descriptor. Drive it with `PollHandshake`; success
+sets both `state.identitySent` and `state.peerAuthenticated`. The peer must
+request the initial Ed25519 client certificate as well as present its own.
+
+For a server, `TLS13Server.BeginEd25519(fd, identity, pin, pending)` starts a
+handshake on an accepted descriptor. `PollEd25519(pending, state)` returns `0`
+while pending, `1` on success or `-1` on failure. Supply an initialized, inactive
+`TLS13Live.State`; success transfers the authenticated connection into it.
+`WantsWrite(pending)` reports pending server output, and `ClosePending` cancels
+an unfinished server handshake.
+
+Both entry points take descriptor ownership, including on failure. They capture
+the supplied identity and pin for that handshake. The certificate must contain
+the pinned Ed25519 key, be self-signed and valid at the current time, and permit
+the peer's TLS role when key-usage extensions are present. CertificateVerify and
+Finished are checked before authentication succeeds. These strict entry points
+do not fall back to CA trust or trust on first use.
+
+Use the resumable application I/O API after success. Enforce an overall deadline
+while handshakes are queued as well as while they are active, and close pending
+state on cancellation. Client handshakes share the serialized parser described
+above; established connections and pending server states progress independently.
 
 A server, on a connection the caller accepted (with a timeout set on it):
 
