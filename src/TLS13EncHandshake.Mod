@@ -245,6 +245,7 @@ BEGIN
   (* Real TLS servers may split one handshake message across several TLS records.
      So we append decrypted plaintext to PARTIAL, parse only complete handshake
      messages, and leave incomplete bytes in PARTIAL for the next record. *)
+  IF plain.len > TLSBytes.MaxLen-partial.len THEN RETURN FALSE END;
   TLSBytes.Append(partial, plain);
 
   pos := 0;
@@ -253,14 +254,16 @@ BEGIN
     IF partial.len - pos < 4 THEN
       parsing := FALSE
     ELSE
-      bodyLen := TLSBytes.GetBE24(partial, pos + 1);
-      total := 4 + bodyLen;
+        bodyLen := TLSBytes.GetBE24(partial, pos + 1);
+        total := 4 + bodyLen;
+        IF total > TLSBytes.MaxLen THEN RETURN FALSE END;
       IF partial.len - pos < total THEN
         parsing := FALSE
       ELSE
         typ := MessageType(partial, pos);
         IF verbose THEN Out.String("  hs msg type="); Out.Int(typ, 0); Out.String(" total="); Out.Int(total, 0); Out.String(" transcript before="); Out.Int(transcript.len, 0); Out.Ln END;
         TLSBytes.Slice(partial, pos, total, msg);
+        IF msg.len > TLSBytes.MaxLen-transcript.len THEN RETURN FALSE END;
 
         (* the order of RFC 8446 2; anything else ends the handshake *)
         IF typ = EncryptedExtensions THEN
@@ -321,7 +324,7 @@ VAR innerType: LONGINT; plain, partial: TLSBytes.Buffer;
 BEGIN
   sawFinished := FALSE; finishedOK := FALSE;
   IF ~TLS13Records.OpenRecord(serverKey, serverIV, seq, record, innerType, plain) THEN RETURN FALSE END;
-  IF innerType # TLS13Records.Handshake THEN RETURN FALSE END;
+  IF (innerType # TLS13Records.Handshake) OR (plain.len < 1) OR (plain.len > 16384) THEN RETURN FALSE END;
   TLSBytes.Init(partial);
   RETURN ProcessServerHandshakeBuffered(plain, partial, transcript, serverFinishedKey, sawFinished, finishedOK)
 END OpenServerHandshakeRecord;
@@ -333,7 +336,7 @@ VAR innerType: LONGINT; plain: TLSBytes.Buffer;
 BEGIN
   sawFinished := FALSE; finishedOK := FALSE;
   IF ~TLS13Records.OpenRecord(serverKey, serverIV, seq, record, innerType, plain) THEN RETURN FALSE END;
-  IF innerType # TLS13Records.Handshake THEN RETURN FALSE END;
+  IF (innerType # TLS13Records.Handshake) OR (plain.len < 1) OR (plain.len > 16384) THEN RETURN FALSE END;
   RETURN ProcessServerHandshakeBuffered(plain, partial, transcript, serverFinishedKey, sawFinished, finishedOK)
 END OpenServerHandshakeRecordBuf;
 

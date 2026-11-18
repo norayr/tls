@@ -214,6 +214,14 @@ BEGIN
   alertDesc := desc; Fail(why)
 END Abort;
 
+PROCEDURE AppendTranscript(VAR transcript, message: TLSBytes.Buffer): BOOLEAN;
+BEGIN
+  IF message.len > TLSBytes.MaxLen-transcript.len THEN
+    Abort(DecodeError, "the handshake transcript is too long"); RETURN FALSE
+  END;
+  TLSBytes.Append(transcript, message); RETURN TRUE
+END AppendTranscript;
+
 (* give up the connection s with the alert desc (sent by Disconnect) *)
 PROCEDURE AbortS(VAR s: State; desc: LONGINT; why: ARRAY OF CHAR);
 BEGIN
@@ -397,7 +405,7 @@ BEGIN
     (* the transcript: message_hash with the hash of the first ClientHello, then the HelloRetryRequest (RFC 8446 4.4.1) *)
     TLS13Keys.HashMessages(clientHelloMsg, h);
     TLSBytes.Init(th); TLSBytes.AppendByte(th, 254); TLSBytes.PutBE24(th, h.len); TLSBytes.Append(th, h);
-    TLSBytes.Append(th, serverHelloMsg);
+    IF ~AppendTranscript(th, serverHelloMsg) THEN RETURN FALSE END;
     IF group = TLS13Handshake.GroupP256 THEN
       tries := 0;
       REPEAT
@@ -410,7 +418,7 @@ BEGIN
       TLS13Handshake.BuildClientHello2(host, clientRandom, group, clientPub, cookie, clientHelloMsg)
     END;
     TLS13Handshake.BuildPlainHandshakeRecord(clientHelloMsg, clientHelloRec);
-    TLSBytes.Append(th, clientHelloMsg);
+    IF ~AppendTranscript(th, clientHelloMsg) THEN RETURN FALSE END;
     IF ~WriteAll(s.fd, clientHelloRec) THEN Fail("writing the second ClientHello failed"); RETURN FALSE END;
     IF ~NextNonCCS(s.fd, rec) OR RefusedByAlert(rec) OR ~TLS13Handshake.GetRecordPayload(rec, serverHelloMsg) THEN
       Abort(UnexpectedMessage, "no ServerHello after the HelloRetryRequest"); RETURN FALSE
@@ -418,7 +426,7 @@ BEGIN
     DumpBuffer("server hello msg", serverHelloMsg)
   END;
   IF ~TLS13Handshake.CheckServerHelloGroup(serverHelloMsg, clientRandom, group, serverPub, why) THEN Abort(IllegalParameter, why); RETURN FALSE END;  (* the session id we sent is clientRandom *)
-  TLSBytes.Append(th, serverHelloMsg);
+  IF ~AppendTranscript(th, serverHelloMsg) THEN RETURN FALSE END;
   DumpBuffer("server pub", serverPub);
 
   IF group = TLS13Handshake.GroupP256 THEN
@@ -478,9 +486,10 @@ BEGIN
     TLSBytes.PutBE24(certMsg, 1 + reqCtx.len + 3 + list.len);
     TLSBytes.AppendByte(certMsg, reqCtx.len); TLSBytes.Append(certMsg, reqCtx); TLSBytes.PutBE24(certMsg, list.len);
     TLSBytes.Append(certMsg, list);
+    IF ~AppendTranscript(thClient, certMsg) THEN RETURN FALSE END;
     TLS13Records.ProtectRecord(cHsKey, cHsIV, clientHSSeq, TLS13Records.Handshake, certMsg, rec);
     IF ~WriteAll(s.fd, rec) THEN Fail("writing the client Certificate failed"); RETURN FALSE END;
-    TLSBytes.Append(thClient, certMsg); INC(clientHSSeq); s.clientAppSeq := clientHSSeq;
+    INC(clientHSSeq); s.clientAppSeq := clientHSSeq;
     IF sendIdentity THEN
       TLS13Keys.HashMessages(thClient, h);
       TLSBytes.Init(list); i := 0; WHILE i < 64 DO TLSBytes.AppendByte(list, 20H); INC(i) END;
@@ -489,9 +498,10 @@ BEGIN
       TLSBytes.Init(certMsg); TLSBytes.AppendByte(certMsg, 15);  (* CertificateVerify *)
       TLSBytes.PutBE24(certMsg, 4 + sig.len); TLSBytes.PutBE16(certMsg, TLSIdentity.Scheme(identity));
       TLSBytes.PutBE16(certMsg, sig.len); TLSBytes.Append(certMsg, sig);
+      IF ~AppendTranscript(thClient, certMsg) THEN RETURN FALSE END;
       TLS13Records.ProtectRecord(cHsKey, cHsIV, clientHSSeq, TLS13Records.Handshake, certMsg, rec);
       IF ~WriteAll(s.fd, rec) THEN Fail("writing the client CertificateVerify failed"); RETURN FALSE END;
-      TLSBytes.Append(thClient, certMsg); INC(clientHSSeq); s.clientAppSeq := clientHSSeq;
+      INC(clientHSSeq); s.clientAppSeq := clientHSSeq;
       identitySent := TRUE; s.identitySent := TRUE
     END;
     IF verbose THEN
@@ -514,7 +524,7 @@ BEGIN
   IF verbose THEN Out.String("TLS13Live: application keys ready"); Out.Ln END;
 
   IF verbose THEN Out.String("TLS13Live: appending client Finished to transcript"); Out.Ln END;
-  TLS13ClientFinished.AppendClientFinished(th, clientFinishedMsg);
+  IF ~AppendTranscript(th, clientFinishedMsg) THEN RETURN FALSE END;
   IF verbose THEN Out.String("TLS13Live: transcript len after client Finished="); Out.Int(th.len, 0); Out.Ln END;
   IF verbose THEN Out.String("TLS13Live: writing client Finished"); Out.Ln END;
   IF ~WriteAll(s.fd, clientFinishedRec) THEN Out.String("TLS13Live: write client Finished failed"); Out.Ln; RETURN FALSE END;
@@ -974,7 +984,7 @@ BEGIN
     (* the transcript: message_hash with the hash of the first ClientHello, then the HelloRetryRequest (RFC 8446 4.4.1) *)
     TLS13Keys.HashMessages(h.clientHelloMsg, h.h);
     TLSBytes.Init(h.th); TLSBytes.AppendByte(h.th, 254); TLSBytes.PutBE24(h.th, h.h.len); TLSBytes.Append(h.th, h.h);
-    TLSBytes.Append(h.th, h.serverHelloMsg);
+    IF ~AppendTranscript(h.th, h.serverHelloMsg) THEN RETURN FALSE END;
     IF h.group = TLS13Handshake.GroupP256 THEN
       h.tries := 0;
       REPEAT
@@ -987,14 +997,14 @@ BEGIN
       TLS13Handshake.BuildClientHello2(h.host, h.clientRandom, h.group, h.clientPub, h.cookie, h.clientHelloMsg)
     END;
     TLS13Handshake.BuildPlainHandshakeRecord(h.clientHelloMsg, h.clientHelloRec);
-    TLSBytes.Append(h.th, h.clientHelloMsg);
+    IF ~AppendTranscript(h.th, h.clientHelloMsg) THEN RETURN FALSE END;
   QueueRecord(s, h.clientHelloRec); RETURN TRUE
 END AsyncRetry;
 
 PROCEDURE AsyncKeys(h: Async; VAR s: State): BOOLEAN;
 BEGIN
   IF ~TLS13Handshake.CheckServerHelloGroup(h.serverHelloMsg, h.clientRandom, h.group, h.serverPub, h.why) THEN Abort(IllegalParameter, h.why); RETURN FALSE END;  (* the session id we sent is clientRandom *)
-  TLSBytes.Append(h.th, h.serverHelloMsg);
+  IF ~AppendTranscript(h.th, h.serverHelloMsg) THEN RETURN FALSE END;
   DumpBuffer("server pub", h.serverPub);
 
   IF h.group = TLS13Handshake.GroupP256 THEN
@@ -1058,9 +1068,10 @@ BEGIN
     TLSBytes.PutBE24(h.certMsg, 1 + h.reqCtx.len + 3 + h.list.len);
     TLSBytes.AppendByte(h.certMsg, h.reqCtx.len); TLSBytes.Append(h.certMsg, h.reqCtx); TLSBytes.PutBE24(h.certMsg, h.list.len);
     TLSBytes.Append(h.certMsg, h.list);
+    IF ~AppendTranscript(h.thClient, h.certMsg) THEN RETURN FALSE END;
     TLS13Records.ProtectRecord(h.cHsKey, h.cHsIV, h.clientHSSeq, TLS13Records.Handshake, h.certMsg, h.rec);
     TLSBytes.Append(s.outgoing, h.rec);
-    TLSBytes.Append(h.thClient, h.certMsg); INC(h.clientHSSeq); s.clientAppSeq := h.clientHSSeq;
+    INC(h.clientHSSeq); s.clientAppSeq := h.clientHSSeq;
     IF h.sendIdentity THEN
       TLS13Keys.HashMessages(h.thClient, h.h);
       TLSBytes.Init(h.list); h.i := 0; WHILE h.i < 64 DO TLSBytes.AppendByte(h.list, 20H); INC(h.i) END;
@@ -1069,9 +1080,10 @@ BEGIN
       TLSBytes.Init(h.certMsg); TLSBytes.AppendByte(h.certMsg, 15);  (* CertificateVerify *)
       TLSBytes.PutBE24(h.certMsg, 4 + h.sig.len); TLSBytes.PutBE16(h.certMsg, TLSIdentity.Scheme(h.localIdentity));
       TLSBytes.PutBE16(h.certMsg, h.sig.len); TLSBytes.Append(h.certMsg, h.sig);
+      IF ~AppendTranscript(h.thClient, h.certMsg) THEN RETURN FALSE END;
       TLS13Records.ProtectRecord(h.cHsKey, h.cHsIV, h.clientHSSeq, TLS13Records.Handshake, h.certMsg, h.rec);
       TLSBytes.Append(s.outgoing, h.rec);
-      TLSBytes.Append(h.thClient, h.certMsg); INC(h.clientHSSeq); s.clientAppSeq := h.clientHSSeq;
+      INC(h.clientHSSeq); s.clientAppSeq := h.clientHSSeq;
       identitySent := TRUE; s.identitySent := TRUE
     END;
     IF verbose THEN
@@ -1094,7 +1106,7 @@ BEGIN
   IF verbose THEN Out.String("TLS13Live: application keys ready"); Out.Ln END;
 
   IF verbose THEN Out.String("TLS13Live: appending client Finished to transcript"); Out.Ln END;
-  TLS13ClientFinished.AppendClientFinished(h.th, h.clientFinishedMsg);
+  IF ~AppendTranscript(h.th, h.clientFinishedMsg) THEN RETURN FALSE END;
   IF verbose THEN Out.String("TLS13Live: transcript len after client Finished="); Out.Int(h.th.len, 0); Out.Ln END;
   IF verbose THEN Out.String("TLS13Live: writing client Finished"); Out.Ln END;
   TLSBytes.Append(s.outgoing, h.clientFinishedRec);

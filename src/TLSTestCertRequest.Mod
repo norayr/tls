@@ -78,6 +78,12 @@ BEGIN
   TLSBytes.Init(extensions); Extension(13, "00020807"); Build(0);
   message.data[10] := CHR(ORD(message.data[10])+1); Reject;
   Start; Check(~TLS13EncHandshake.SignatureRequested(TLSSig.Ed25519));
+  TLSBytes.Init(extensions); Extension(13, "00020807"); Build(0); Start;
+  TLSBytes.SetLen(transcript, TLSBytes.MaxLen); Check(~Process());
+  Start; TLSBytes.SetLen(partial, TLSBytes.MaxLen); Check(~Process());
+  Start; TLSBytes.Init(message); TLSBytes.AppendByte(message, TLS13EncHandshake.CertificateRequest);
+  TLSBytes.PutBE24(message, TLSBytes.MaxLen); Check(~Process());
+  Check(~TLS13EncHandshake.CertificateRequested(context));
   Out.String("TLSTestCertRequest: "); Out.Int(checks, 0); Out.String(" checks, ");
   Out.Int(failures, 0); Out.String(" failed"); Out.Ln;
   IF failures # 0 THEN HALT(1) END

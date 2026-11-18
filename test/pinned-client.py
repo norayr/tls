@@ -206,3 +206,36 @@ for mode in ("complete", "cancel"):
     assert result.returncode == 0, (mode, result.returncode, result.stdout, result.stderr)
     assert not failures, (mode, failures)
     print("PASS pinned native client queue:", mode)
+
+
+native, peer = socket.socketpair(); peer.settimeout(20)
+process = subprocess.Popen([str(build/"TestPinnedClient"), str(client[0]), str(client[1]), server[2].hex(),
+                            str(native.fileno()), "reject"], cwd=build, env=env,
+                           pass_fds=(native.fileno(),), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+native.close()
+try:
+    def exact(length):
+        data = bytearray()
+        while len(data) < length:
+            chunk = peer.recv(length-len(data))
+            assert chunk, "client closed before its ClientHello"
+            data.extend(chunk)
+        return data
+
+    header = exact(5); hello = exact(int.from_bytes(header[3:5], "big"))
+    session = hello[39:39+hello[38]]
+    cookie = bytes(16290)
+    extensions = b"\x00\x2b\x00\x02\x03\x04"+b"\x00\x2c"+(len(cookie)+2).to_bytes(2, "big")+len(cookie).to_bytes(2, "big")+cookie
+    random = bytes.fromhex("cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c")
+    body = b"\x03\x03"+random+bytes([len(session)])+session+b"\x13\x01\x00"+len(extensions).to_bytes(2, "big")+extensions
+    retry = b"\x02"+len(body).to_bytes(3, "big")+body
+    assert len(retry) <= 16384
+    peer.sendall(b"\x16\x03\x03"+len(retry).to_bytes(2, "big")+retry)
+    assert not peer.recv(16384), "client sent a second ClientHello beyond its transcript limit"
+    stdout, stderr = process.communicate(timeout=20)
+    assert process.returncode == 0 and "transcript is too long" in stdout, (process.returncode, stdout, stderr)
+    print("PASS pinned native client: bounded HelloRetryRequest transcript")
+finally:
+    peer.close()
+    if process.poll() is None:
+        process.kill(); process.wait()
