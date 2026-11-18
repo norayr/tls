@@ -20,6 +20,7 @@ TESTS = TLSTestBytes TLSTestSHA256 TLSTestHKDF TLSTestSHA512 TLSTestNum TLSTestN
 TESTS += TLSTestSHA512Stream
 TESTS += TLSTestEd25519
 TESTS += TLSTestEd25519Identity
+TESTS += TLSTestCertRequest
 
 all: get_deps build_deps buildThis
 
@@ -110,6 +111,7 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestIP.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13EncHandshake.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestEncHandshake.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestCertRequest.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13ClientFinished.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestClientFin.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Application.Mod

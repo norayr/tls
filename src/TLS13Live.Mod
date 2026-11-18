@@ -33,7 +33,7 @@ TYPE
   cHsKey, cHsIV, sHsKey, sHsIV, cFinKey, sFinKey: TLSBytes.Buffer;
   hsSecret, masterSecret, clientFinishedRec, clientFinishedMsg, thServerFinished: TLSBytes.Buffer;
   thClient, reqCtx, certMsg, list, sig: TLSBytes.Buffer;  (* the transcript for our Finished, a certificate request *)
-  sawFinished, finishedOK, zero: BOOLEAN;
+  sawFinished, finishedOK, zero, sendIdentity: BOOLEAN;
   group, tries: LONGINT; cookie, p256Priv, p256Pub, h: TLSBytes.Buffer;
   serverHSSeq, clientHSSeq: LONGINT;
   why: ARRAY 128 OF CHAR;
@@ -362,7 +362,7 @@ VAR
   cHsKey, cHsIV, sHsKey, sHsIV, cFinKey, sFinKey: TLSBytes.Buffer;
   hsSecret, masterSecret, clientFinishedRec, clientFinishedMsg, thServerFinished: TLSBytes.Buffer;
   thClient, reqCtx, certMsg, list, sig: TLSBytes.Buffer;  (* the transcript for our Finished, a certificate request *)
-  sawFinished, finishedOK, zero: BOOLEAN;
+  sawFinished, finishedOK, zero, sendIdentity: BOOLEAN;
   group, tries: LONGINT; cookie, p256Priv, p256Pub, h: TLSBytes.Buffer;
   serverHSSeq, clientHSSeq: LONGINT;
   why: ARRAY 128 OF CHAR;
@@ -464,8 +464,9 @@ BEGIN
   IF TLS13EncHandshake.CertificateRequested(reqCtx) THEN
     (* RFC 8446 4.4.2: our Certificate echoing the request context, empty without an identity;
        with one its CertificateVerify (4.4.3); the Finished covers them *)
+    sendIdentity := (identity # NIL) & TLS13EncHandshake.SignatureRequested(TLSIdentity.Scheme(identity));
     TLSBytes.Init(list); i := 0;
-    WHILE (identity # NIL) & (i < identity.n) DO
+    WHILE sendIdentity & (i < identity.n) DO
       TLSBytes.PutBE24(list, identity.certs[i].len); TLSBytes.Append(list, identity.certs[i]); TLSBytes.PutBE16(list, 0); INC(i)
     END;
     TLSBytes.Init(certMsg); TLSBytes.AppendByte(certMsg, TLS13EncHandshake.Certificate);
@@ -475,7 +476,7 @@ BEGIN
     TLS13Records.ProtectRecord(cHsKey, cHsIV, clientHSSeq, TLS13Records.Handshake, certMsg, rec);
     IF ~WriteAll(s.fd, rec) THEN Fail("writing the client Certificate failed"); RETURN FALSE END;
     TLSBytes.Append(thClient, certMsg); INC(clientHSSeq); s.clientAppSeq := clientHSSeq;
-    IF identity # NIL THEN
+    IF sendIdentity THEN
       TLS13Keys.HashMessages(thClient, h);
       TLSBytes.Init(list); i := 0; WHILE i < 64 DO TLSBytes.AppendByte(list, 20H); INC(i) END;
       TLSBytes.AppendString(list, "TLS 1.3, client CertificateVerify"); TLSBytes.AppendByte(list, 0); TLSBytes.Append(list, h);
@@ -490,7 +491,7 @@ BEGIN
     END;
     IF verbose THEN
       Out.String("TLS13Live: the server asked for a client certificate, ");
-      IF identity # NIL THEN Out.String("sent it") ELSE Out.String("sent none") END; Out.Ln
+      IF sendIdentity THEN Out.String("sent it") ELSE Out.String("sent none") END; Out.Ln
     END
   END;
   IF verbose THEN Out.String("TLS13Live: building client Finished"); Out.Ln END;
@@ -1002,8 +1003,9 @@ BEGIN
   IF TLS13EncHandshake.CertificateRequested(h.reqCtx) THEN
     (* RFC 8446 4.4.2: our Certificate echoing the request context, empty without an identity;
        with one its CertificateVerify (4.4.3); the Finished covers them *)
+    h.sendIdentity := (identity # NIL) & TLS13EncHandshake.SignatureRequested(TLSIdentity.Scheme(identity));
     TLSBytes.Init(h.list); h.i := 0;
-    WHILE (identity # NIL) & (h.i < identity.n) DO
+    WHILE h.sendIdentity & (h.i < identity.n) DO
       TLSBytes.PutBE24(h.list, identity.certs[h.i].len); TLSBytes.Append(h.list, identity.certs[h.i]); TLSBytes.PutBE16(h.list, 0); INC(h.i)
     END;
     TLSBytes.Init(h.certMsg); TLSBytes.AppendByte(h.certMsg, TLS13EncHandshake.Certificate);
@@ -1013,7 +1015,7 @@ BEGIN
     TLS13Records.ProtectRecord(h.cHsKey, h.cHsIV, h.clientHSSeq, TLS13Records.Handshake, h.certMsg, h.rec);
     TLSBytes.Append(s.outgoing, h.rec);
     TLSBytes.Append(h.thClient, h.certMsg); INC(h.clientHSSeq); s.clientAppSeq := h.clientHSSeq;
-    IF identity # NIL THEN
+    IF h.sendIdentity THEN
       TLS13Keys.HashMessages(h.thClient, h.h);
       TLSBytes.Init(h.list); h.i := 0; WHILE h.i < 64 DO TLSBytes.AppendByte(h.list, 20H); INC(h.i) END;
       TLSBytes.AppendString(h.list, "TLS 1.3, client CertificateVerify"); TLSBytes.AppendByte(h.list, 0); TLSBytes.Append(h.list, h.h);
@@ -1028,7 +1030,7 @@ BEGIN
     END;
     IF verbose THEN
       Out.String("TLS13Live: the server asked for a client certificate, ");
-      IF identity # NIL THEN Out.String("sent it") ELSE Out.String("sent none") END; Out.Ln
+      IF h.sendIdentity THEN Out.String("sent it") ELSE Out.String("sent none") END; Out.Ln
     END
   END;
   IF verbose THEN Out.String("TLS13Live: building client Finished"); Out.Ln END;

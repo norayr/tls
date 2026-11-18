@@ -11,6 +11,7 @@ import ssl
 import subprocess
 import sys
 import threading
+import time
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -30,7 +31,7 @@ for module in ("TLSBytes", "TLSSHA512", "TLSEd25519", "TLSSig", "TLSIdentity", "
                "TLS13Handshake", "TLS13EncHandshake", "TLS13ClientFinished", "TLS13Live", "TLS13Server"):
     subprocess.run([str(Path(compiler).resolve()), "-O"+model, "-sF", str(source/(module+".Mod"))],
                    cwd=build, env=env, check=True)
-for module in ("TestEd25519Server", "TestAsync"):
+for module in ("TestEd25519Server", "TestAsync", "TestClientIdentity"):
     subprocess.run([str(Path(compiler).resolve()), "-O"+model, *shlex.split(flags), str(tests/(module+".Mod"))],
                    cwd=build, env=env, check=True)
 private = Ed25519PrivateKey.generate()
@@ -162,3 +163,43 @@ for curve, mode in (("X25519", "async"), ("prime256v1", "async"), ("X25519", "bl
         assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
         assert not failures, failures
         print("PASS native client with Ed25519 server:", curve, mode)
+
+
+for mode in ("blocking", "async"):
+    for schemes, expected in (("ed25519", "sent"), ("ecdsa_secp256r1_sha256", "empty")):
+        with socket.socket() as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            address = reservation.getsockname()
+        with (build/"certificate-request.log").open("w+") as log:
+            server = subprocess.Popen(["openssl", "s_server", "-accept", "127.0.0.1:"+str(address[1]), "-tls1_3",
+                                       "-cert", str(cert), "-key", str(key), "-CAfile", str(cert), "-verify", "1",
+                                       "-verify_return_error", "-client_sigalgs", schemes, "-www", "-msg", "-quiet", "-naccept", "1"],
+                                      stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+            try:
+                deadline = time.monotonic()+15
+                while True:
+                    if server.poll() is not None:
+                        log.seek(0)
+                        raise AssertionError("OpenSSL server exited before listening: "+log.read())
+                    assert time.monotonic() < deadline, "OpenSSL server did not listen"
+                    try:
+                        connection = socket.create_connection(address, timeout=1)
+                        break
+                    except ConnectionRefusedError:
+                        time.sleep(0.01)
+                with connection:
+                    connection.setblocking(True)
+                    result = subprocess.run([str(build/"TestClientIdentity"), str(cert), str(key),
+                                             str(connection.fileno()), mode, expected], cwd=build,
+                                            env=dict(env, SSL_CERT_FILE=str(cert)), pass_fds=(connection.fileno(),),
+                                            capture_output=True, text=True, timeout=40)
+                server.wait(timeout=15)
+                log.seek(0); wire = log.read()
+                assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, wire)
+                assert server.returncode == 0, wire
+                client_verified = any(line.startswith("<<<") and "CertificateVerify" in line for line in wire.splitlines())
+                assert client_verified == (expected == "sent"), wire
+                print("PASS native client certificate negotiation:", mode, schemes, expected)
+            finally:
+                if server.poll() is None:
+                    server.kill(); server.wait()

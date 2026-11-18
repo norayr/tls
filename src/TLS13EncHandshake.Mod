@@ -17,7 +17,7 @@ TYPE
 VAR
   stage: LONGINT;      (* 0: expecting EncryptedExtensions, 1 Certificate (or CertificateRequest
                           before it), 2 CertificateVerify, 3 Finished, 4 done (RFC 8446 2: no PSK) *)
-  certRequested: BOOLEAN; reqContext: TLSBytes.Buffer;  (* a CertificateRequest and its context *)
+  certRequested: BOOLEAN; reqContext, reqSchemes: TLSBytes.Buffer;
   cvOK: BOOLEAN;       (* the CertificateVerify signature verified *)
   leaf: CertPtr;
   expectedHost: ARRAY 256 OF CHAR;
@@ -52,7 +52,8 @@ END ResetCapturedCerts;
 (** before a handshake: nothing seen yet *)
 PROCEDURE ResetState*;
 BEGIN
-  stage := 0; cvOK := FALSE; certRequested := FALSE; TLSBytes.Init(reqContext); ResetCapturedCerts
+  stage := 0; cvOK := FALSE; certRequested := FALSE;
+  TLSBytes.Init(reqContext); TLSBytes.Init(reqSchemes); ResetCapturedCerts
 END ResetState;
 
 (** the server asked for a client certificate (CertificateRequest); ctx: its request context, to
@@ -61,6 +62,41 @@ PROCEDURE CertificateRequested*(VAR ctx: TLSBytes.Buffer): BOOLEAN;
 BEGIN
   TLSBytes.Copy(reqContext, ctx); RETURN certRequested
 END CertificateRequested;
+
+(** Whether the CertificateRequest permits this CertificateVerify signature scheme. *)
+PROCEDURE SignatureRequested*(scheme: LONGINT): BOOLEAN;
+VAR i: LONGINT;
+BEGIN
+  IF ~certRequested THEN RETURN FALSE END;
+  i := 0;
+  WHILE i+2 <= reqSchemes.len DO
+    IF TLSBytes.GetBE16(reqSchemes, i) = scheme THEN RETURN TRUE END;
+    INC(i, 2)
+  END;
+  RETURN FALSE
+END SignatureRequested;
+
+PROCEDURE ParseCertificateRequest(VAR msg: TLSBytes.Buffer): BOOLEAN;
+VAR pos, size, typ, i: LONGINT; seen: ARRAY 2048 OF SET; schemes: TLSBytes.Buffer; found: BOOLEAN;
+BEGIN
+  (* Initial-handshake requests have an empty context; post-handshake requests are unsupported. *)
+  IF (msg.len < 7) OR (msg.data[4] # 0X) OR (TLSBytes.GetBE16(msg, 5) # msg.len-7) THEN RETURN FALSE END;
+  FOR i := 0 TO LEN(seen)-1 DO seen[i] := {} END;
+  pos := 7; found := FALSE; TLSBytes.Init(schemes);
+  WHILE pos < msg.len DO
+    IF pos+4 > msg.len THEN RETURN FALSE END;
+    typ := TLSBytes.GetBE16(msg, pos); size := TLSBytes.GetBE16(msg, pos+2); INC(pos, 4);
+    IF (pos+size > msg.len) OR (typ MOD 32 IN seen[typ DIV 32]) THEN RETURN FALSE END;
+    INCL(seen[typ DIV 32], typ MOD 32);
+    IF (typ = 13) OR (typ = 50) THEN
+      IF (size < 4) OR ODD(size) OR (TLSBytes.GetBE16(msg, pos) # size-2) THEN RETURN FALSE END;
+      IF typ = 13 THEN TLSBytes.Slice(msg, pos+2, size-2, schemes); found := TRUE END
+    END;
+    INC(pos, size)
+  END;
+  IF ~found THEN RETURN FALSE END;
+  TLSBytes.Copy(schemes, reqSchemes); TLSBytes.Init(reqContext); RETURN TRUE
+END ParseCertificateRequest;
 
 (** the server proved with CertificateVerify that it has the key of its certificate *)
 PROCEDURE CertificateVerifyOK*(): BOOLEAN;
@@ -220,12 +256,9 @@ BEGIN
         (* the order of RFC 8446 2; anything else ends the handshake *)
         IF typ = EncryptedExtensions THEN
           IF stage # 0 THEN RETURN FALSE END; stage := 1
-        ELSIF typ = CertificateRequest THEN  (* RFC 8446 4.3.2: context <0..255>, extensions <2..2^16-1> *)
-          IF (stage # 1) OR certRequested OR (msg.len < 5) THEN RETURN FALSE END;
-          bodyLen := ORD(msg.data[4]);
-          IF (msg.len < 5 + bodyLen + 2) OR (TLSBytes.GetBE16(msg, 5 + bodyLen) < 2) OR
-             (5 + bodyLen + 2 + TLSBytes.GetBE16(msg, 5 + bodyLen) # msg.len) THEN RETURN FALSE END;
-          TLSBytes.Slice(msg, 5, bodyLen, reqContext); certRequested := TRUE
+        ELSIF typ = CertificateRequest THEN
+          IF (stage # 1) OR certRequested OR ~ParseCertificateRequest(msg) THEN RETURN FALSE END;
+          certRequested := TRUE
         ELSIF typ = Certificate THEN
           IF (stage # 1) OR (msg.len < 5) OR (msg.data[4] # 0X) THEN RETURN FALSE END;  (* empty request context *)
           DebugCertificateMessage(msg);
