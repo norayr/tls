@@ -28,6 +28,7 @@ build = Path(directory).resolve()
 build.mkdir(parents=True, exist_ok=True)
 env = dict(os.environ, OBERON=str(build)+";"+os.environ.get("OBERON", ""))
 for module in ("TLSBytes", "TLSSHA512", "TLSEd25519", "TLSSig", "TLSIdentity", "TLSCertGen",
+               "TLSX509Ext", "TLSX509Chain", "TLS13Auth",
                "TLS13Handshake", "TLS13EncHandshake", "TLS13ClientFinished", "TLS13Live", "TLS13Server"):
     subprocess.run([str(Path(compiler).resolve()), "-O"+model, "-sF", str(source/(module+".Mod"))],
                    cwd=build, env=env, check=True)

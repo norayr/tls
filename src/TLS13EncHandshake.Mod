@@ -23,6 +23,7 @@ VAR
   expectedHost: ARRAY 256 OF CHAR;
   expectedHostSet: BOOLEAN;
   capturedCerts: ARRAY 8 OF TLSBytes.Buffer;
+  capturedMessage: TLSBytes.Buffer;
   capturedCertCount: LONGINT;
   capturedHostOK: BOOLEAN;
 
@@ -43,6 +44,7 @@ VAR i: LONGINT;
 BEGIN
   capturedCertCount := 0;
   capturedHostOK := FALSE;
+  TLSBytes.Init(capturedMessage);
   i := 0;
   WHILE i < LEN(capturedCerts) DO
     TLSBytes.Init(capturedCerts[i]); INC(i)
@@ -136,6 +138,12 @@ BEGIN
   RETURN TRUE
 END GetCapturedCert;
 
+(** The complete Certificate handshake message, including its context and entry framing. *)
+PROCEDURE CapturedCertificateMessage*(VAR message: TLSBytes.Buffer): BOOLEAN;
+BEGIN
+  TLSBytes.Copy(capturedMessage, message); RETURN capturedMessage.len > 0
+END CapturedCertificateMessage;
+
 PROCEDURE HostnameOK*(): BOOLEAN;
 BEGIN
   RETURN capturedHostOK
@@ -178,6 +186,7 @@ PROCEDURE DebugCertificateMessage(VAR msg: TLSBytes.Buffer);
 VAR leaf, der: TLSBytes.Buffer; info: TLSX509.CertInfo; pos, limit: LONGINT;
 BEGIN
   ResetCapturedCerts;
+  TLSBytes.Copy(msg, capturedMessage);
   IF TLS13Certs.CertificateListStart(msg, pos, limit) THEN
     WHILE (capturedCertCount < LEN(capturedCerts)) & TLS13Certs.NextCertificate(msg, pos, limit, der) DO
       TLSBytes.Copy(der, capturedCerts[capturedCertCount]); INC(capturedCertCount)
