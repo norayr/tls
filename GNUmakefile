@@ -21,6 +21,7 @@ TESTS += TLSTestSHA512Stream
 TESTS += TLSTestEd25519
 TESTS += TLSTestEd25519Identity
 TESTS += TLSTestCertRequest
+TESTS += TLSTestAuth
 
 all: get_deps build_deps buildThis
 
@@ -121,10 +122,12 @@ buildThis:
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestEd25519.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSNow.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSIdentity.Mod
+	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Auth.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestIdentity.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLSCertGen.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestCertGen.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestEd25519Identity.Mod
+	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/TLSTestAuth.Mod
 	cd $(BUILD) && $(VOC) -m $(mkfile_dir_path)/src/certGen.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Live.Mod
 	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/TLS13Server.Mod
